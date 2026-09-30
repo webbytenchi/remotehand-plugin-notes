@@ -58,7 +58,7 @@ input,select,textarea{outline:0}
 .form-row{display:grid;grid-template-columns:145px minmax(0,1fr);gap:9px;align-items:center;margin-bottom:10px}
 .form-row input,.form-row select{width:100%;padding:6px 8px;background:var(--remotehand-input-background,#0e141a)}
 .checklist{display:flex;flex-direction:column;gap:6px}.check-item{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:7px;align-items:center}.check-item input[type=text]{padding:7px 8px;background:var(--remotehand-input-background,#0e141a);width:100%}.check-item.done input[type=text]{text-decoration:line-through;opacity:.65}
-.attachment-area{margin-top:14px;padding-top:12px;border-top:1px solid var(--remotehand-border,#2e3743)}.attachment-area h3{margin:0 0 6px;font-size:13px}.attachment-note{font-size:12px;color:var(--remotehand-muted-text,#9aa8b8);line-height:1.45}
+.attachment-area{margin-top:14px;padding-top:12px;border-top:1px solid var(--remotehand-border,#2e3743)}.attachment-area h3{margin:0 0 6px;font-size:13px}.attachment-note{font-size:12px;color:var(--remotehand-muted-text,#9aa8b8);line-height:1.45}.attachment-list{display:flex;flex-direction:column;gap:6px;margin:8px 0}.attachment-row{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:8px;align-items:center;padding:6px;border:1px solid var(--remotehand-border,#34404d);border-radius:8px;background:var(--remotehand-background,#11151a)}.attachment-row.dragging{opacity:.45}.attachment-row.drop-target{outline:2px solid var(--remotehand-accent-border,#6f9bc8)}.attachment-thumb{width:44px;height:44px;border-radius:6px;object-fit:cover;background:rgba(255,255,255,.04);display:flex;align-items:center;justify-content:center;font-size:20px;overflow:hidden}.attachment-thumb img{width:100%;height:100%;object-fit:cover}.attachment-name{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.attachment-size{font-size:11px;color:var(--remotehand-muted-text,#9aa8b8);margin-top:2px}.attachment-actions{display:flex;gap:4px}
 .color-row{display:flex;gap:5px;flex-wrap:wrap}.swatch{width:24px;height:24px;border-radius:50%;padding:0;border:2px solid transparent;background:var(--swatch)}.swatch.active{border-color:var(--remotehand-text,#fff)}
 .notice{padding:7px 9px;margin-bottom:8px;border:1px solid var(--remotehand-border,#3d4a58);border-radius:7px;color:var(--remotehand-muted-text,#a7b2bf)}
 .danger{border-color:var(--remotehand-danger-border,#754448);color:var(--remotehand-danger-text,#efaaaa)}
@@ -139,8 +139,9 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
       </div>
       <div class="attachment-area">
         <h3>Attachments</h3>
-        <div class="attachment-note">File and image attachment persistence is waiting for RemoteHand's generic Vault encrypted-blob API. No attachment bytes are stored in plaintext.</div>
-        <button disabled style="margin-top:7px">+ Add attachment</button>
+        <div class="attachment-note">Attachment bytes are encrypted by RemoteHand Vault. Opening a general file temporarily materializes a private copy in the OS temp directory and schedules it for cleanup.</div>
+        <div id="attachmentList" class="attachment-list"></div>
+        <button id="addAttachmentBtn" style="margin-top:7px">+ Add attachment</button>
       </div>
     </div>
     <div class="modal-footer">
@@ -226,6 +227,7 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
   const colorRow = $("colorRow");
   const saveState = $("saveState");
   const editorNotice = $("editorNotice");
+  const attachmentList = $("attachmentList");
 
   let notes = [];
   let catalog = {version:1,noteIds:[],manualOrder:{main:[],archive:[],trash:[]},pinnedOrder:[]};
@@ -243,6 +245,8 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
   let markdownEditing = false;
   let loadingNotes = false;
   let confirmResolve = null;
+  let draggedAttachmentId = null;
+  const attachmentPreviewUrls = new Map();
 
   const nowIso = () => new Date().toISOString();
   const newId = () => crypto.randomUUID();
@@ -306,6 +310,27 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
     $("confirmOkBtn").textContent=confirmLabel;
     $("confirmBackdrop").hidden=false;
     return new Promise(resolve=>{confirmResolve=resolve;});
+  }
+
+  function formatBytes(bytes) {
+    const value=Number(bytes)||0;
+    if(value<1024)return value+" B";
+    if(value<1024*1024)return (value/1024).toFixed(value<10*1024?1:0)+" KiB";
+    if(value<1024*1024*1024)return (value/(1024*1024)).toFixed(value<10*1024*1024?1:0)+" MiB";
+    return (value/(1024*1024*1024)).toFixed(1)+" GiB";
+  }
+
+  function revokeAttachmentPreviews() {
+    for(const url of attachmentPreviewUrls.values()) URL.revokeObjectURL(url);
+    attachmentPreviewUrls.clear();
+  }
+
+  function base64NoPadToBlobUrl(data,mediaType) {
+    const padded=data+"=".repeat((4-data.length%4)%4);
+    const binary=atob(padded);
+    const bytes=new Uint8Array(binary.length);
+    for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);
+    return URL.createObjectURL(new Blob([bytes],{type:mediaType||"application/octet-stream"}));
   }
 
   function setStatus(message, error=false) {
@@ -509,6 +534,7 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
     $("trashBtn").disabled=locked;
     document.querySelectorAll(".swatch").forEach(btn=>btn.disabled=locked);
     $("addChecklistItemBtn").disabled=locked;
+    $("addAttachmentBtn").disabled=locked;
   }
 
   function renderEditor() {
@@ -539,7 +565,123 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
     $("restoreBtn").disabled=false;
     $("convertBtn").disabled=note.locked;
     $("convertBtn").textContent=note.type==="note"?"Convert to checklist":"Convert to note";
+    renderAttachments();
     saveState.textContent="Saved";
+  }
+
+  function renderAttachments() {
+    const note=editorDraft;
+    revokeAttachmentPreviews();
+    attachmentList.replaceChildren();
+    if(!note)return;
+    const attachments=Array.isArray(note.attachments)?note.attachments:[];
+    for(const attachment of attachments){
+      const row=document.createElement("div");
+      row.className="attachment-row";
+      row.dataset.id=attachment.id;
+      row.draggable=!note.locked;
+      const thumb=document.createElement("div");
+      thumb.className="attachment-thumb";
+      thumb.textContent=String(attachment.mediaType||"").startsWith("image/")?"🖼":"📄";
+      const info=document.createElement("div");
+      const name=document.createElement("div");name.className="attachment-name";name.textContent=attachment.name||"Attachment";
+      const size=document.createElement("div");size.className="attachment-size";size.textContent=formatBytes(attachment.size);
+      info.append(name,size);
+      const actions=document.createElement("div");actions.className="attachment-actions";
+      const open=document.createElement("button");open.textContent="Open";open.type="button";
+      const remove=document.createElement("button");remove.textContent="✕";remove.type="button";remove.className="danger";remove.disabled=note.locked;
+      open.addEventListener("click",()=>void openAttachment(attachment));
+      remove.addEventListener("click",()=>void removeAttachment(attachment.id));
+      actions.append(open,remove);
+      row.append(thumb,info,actions);
+      row.addEventListener("dragstart",()=>{if(note.locked)return;draggedAttachmentId=attachment.id;row.classList.add("dragging");});
+      row.addEventListener("dragend",()=>{draggedAttachmentId=null;row.classList.remove("dragging");document.querySelectorAll(".attachment-row.drop-target").forEach(el=>el.classList.remove("drop-target"));});
+      row.addEventListener("dragover",event=>{if(!note.locked&&draggedAttachmentId&&draggedAttachmentId!==attachment.id){event.preventDefault();row.classList.add("drop-target");}});
+      row.addEventListener("dragleave",()=>row.classList.remove("drop-target"));
+      row.addEventListener("drop",event=>{event.preventDefault();row.classList.remove("drop-target");if(draggedAttachmentId)reorderAttachments(draggedAttachmentId,attachment.id);});
+      attachmentList.append(row);
+
+      if(String(attachment.mediaType||"").startsWith("image/") && Number(attachment.size)<=8*1024*1024){
+        void request("attachment.preview",{blobKey:attachment.blobKey}).then(result=>{
+          if(!editorDraft||!attachmentList.contains(row)||!result?.data)return;
+          const url=base64NoPadToBlobUrl(result.data,attachment.mediaType);
+          attachmentPreviewUrls.set(attachment.id,url);
+          thumb.textContent="";
+          const img=document.createElement("img");img.src=url;img.alt="";thumb.append(img);
+        }).catch(()=>{});
+      }
+    }
+  }
+
+  async function addAttachment() {
+    if(!editorDraft||editorDraft.locked)return;
+    syncDraftFromFields();
+    clearTimeout(autosaveTimer);
+    const before=clone(editorDraft.attachments||[]);
+    const existingTotal=before.reduce((sum,item)=>sum+(Number(item.size)||0),0);
+    saveState.textContent="Adding attachment…";
+    try{
+      const result=await request("attachment.add",{
+        id:newId(),
+        existingTotalBytes:existingTotal,
+        existingCount:before.length
+      });
+      if(!result?.opened){saveState.textContent="Saved";return;}
+      editorDraft.attachments=[...before,result.attachment];
+      editorDraft.updatedAt=nowIso();
+      try{
+        await saveDraft(true);
+      }catch(error){
+        editorDraft.attachments=before;
+        await request("attachment.delete",{blobKey:result.attachment.blobKey}).catch(()=>{});
+        renderAttachments();
+        throw error;
+      }
+      renderEditor();
+      setStatus("Attachment encrypted and saved in RemoteHand Vault.");
+    }catch(error){
+      saveState.textContent="Save failed";
+      setStatus(String(error),true);
+    }
+  }
+
+  async function removeAttachment(id) {
+    if(!editorDraft||editorDraft.locked)return;
+    const attachment=(editorDraft.attachments||[]).find(item=>item.id===id);
+    if(!attachment)return;
+    const before=clone(editorDraft.attachments||[]);
+    editorDraft.attachments=before.filter(item=>item.id!==id);
+    editorDraft.updatedAt=nowIso();
+    try{
+      await saveDraft(true);
+      const result=await request("attachment.delete",{blobKey:attachment.blobKey});
+      renderEditor();
+      setStatus(result?.deleted?"Attachment removed.":"Attachment metadata removed; encrypted blob was already absent.");
+    }catch(error){
+      editorDraft.attachments=before;
+      renderEditor();
+      setStatus(String(error),true);
+    }
+  }
+
+  async function openAttachment(attachment) {
+    try{
+      setStatus("Opening encrypted attachment…");
+      await request("attachment.open",{blobKey:attachment.blobKey,name:attachment.name});
+      setStatus("Attachment opened with the system app.");
+    }catch(error){setStatus(String(error),true);}
+  }
+
+  function reorderAttachments(sourceId,targetId) {
+    if(!editorDraft||editorDraft.locked||sourceId===targetId)return;
+    const list=editorDraft.attachments||[];
+    const from=list.findIndex(item=>item.id===sourceId);
+    const to=list.findIndex(item=>item.id===targetId);
+    if(from<0||to<0)return;
+    list.splice(to,0,list.splice(from,1)[0]);
+    editorDraft.updatedAt=nowIso();
+    markDirty();
+    renderAttachments();
   }
 
   function renderChecklistEditor() {
@@ -643,6 +785,8 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
     markdownEdit.value="";
     markdownView.replaceChildren();
     checklistHost.replaceChildren();
+    revokeAttachmentPreviews();
+    attachmentList.replaceChildren();
     labelsInput.value="";
     board.replaceChildren();
     pinnedBoard.replaceChildren();
@@ -715,6 +859,7 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
   $("emptyTrashBtn").addEventListener("click",emptyTrash);
   $("unlockVaultBtn").addEventListener("click",()=>loadNotes(true));
   $("addChecklistItemBtn").addEventListener("click",()=>addChecklistItem());
+  $("addAttachmentBtn").addEventListener("click",()=>void addAttachment());
   $("hideCompletedToggle").addEventListener("change",renderChecklistEditor);
   noteTitle.addEventListener("input",markDirty);
   labelsInput.addEventListener("input",markDirty);

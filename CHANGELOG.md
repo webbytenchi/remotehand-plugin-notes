@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0 - Unreleased
+## 0.1.0 - 2026-10-01
 
 ### Added
 - Initial RemoteHand Notes plugin foundation.
@@ -20,3 +20,6 @@
 ### Notes
 - Attachment open materializes a temporary plaintext copy under the OS temp directory only for the external system application, schedules cleanup retries, and removes stale Notes temp files on the next plugin start.
 - Image compression settings remain reserved for the follow-up compression-policy implementation; current attachment storage preserves original file bytes.
+
+### Validation
+- Manual acceptance completed on Windows for the full v0.1.0 scope, including Vault lifecycle behavior and encrypted attachment workflows.

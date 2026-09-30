@@ -147,6 +147,17 @@ struct AttachmentOpenParams {
     name: String,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AttachmentAddBytesParams {
+    id: String,
+    name: String,
+    media_type: String,
+    data: String,
+    existing_total_bytes: u64,
+    existing_count: u64,
+}
+
 fn write_frame<W: Write, T: Serialize>(writer: &mut W, value: &T) -> Result<(), String> {
     let payload = serde_json::to_vec(value).map_err(|error| error.to_string())?;
     if payload.is_empty() || payload.len() > MAX_FRAME_BYTES {
@@ -790,6 +801,97 @@ fn upload_attachment(
     )
 }
 
+fn upload_attachment_bytes(
+    host_call: &mut dyn FnMut(&str, Value) -> Result<Value, String>,
+    params: AttachmentAddBytesParams,
+) -> Result<Value, String> {
+    validate_note_id(&params.id)?;
+    if params.name.trim().is_empty() || params.name.len() > 255 {
+        return Err("attachment name is invalid".to_string());
+    }
+    if params.media_type.trim().is_empty() || params.media_type.len() > 128 {
+        return Err("attachment media type is invalid".to_string());
+    }
+    if params.data.len() > 12 * 1024 * 1024 {
+        return Err("clipboard attachment exceeds the inline transfer limit".to_string());
+    }
+    let bytes = STANDARD_NO_PAD
+        .decode(params.data)
+        .map_err(|_| "clipboard attachment encoding is invalid".to_string())?;
+    if bytes.len() > 8 * 1024 * 1024 {
+        return Err(
+            "clipboard attachment exceeds the 8 MiB inline transfer limit; save it as a file and attach it instead"
+                .to_string(),
+        );
+    }
+
+    request_vault_access(host_call)?;
+    let settings = sanitize_settings(get_settings(host_call)?);
+    validate_attachment_limits(
+        &settings,
+        bytes.len() as u64,
+        &params.media_type,
+        params.existing_total_bytes,
+        params.existing_count,
+    )?;
+
+    let blob_key = format!("attachment/{}", params.id);
+    let begin = host_call(
+        "vault.blob.begin",
+        json!({ "key": blob_key, "size": bytes.len() as u64 }),
+    )?;
+    let upload_id = begin
+        .get("uploadId")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "host did not return a Vault blob upload id".to_string())?
+        .to_string();
+    let chunk_size = begin
+        .get("chunkSize")
+        .and_then(Value::as_u64)
+        .ok_or_else(|| "host did not return a Vault blob chunk size".to_string())?
+        as usize;
+    if chunk_size == 0 || chunk_size > 4 * 1024 * 1024 {
+        return Err("host returned an invalid Vault blob chunk size".to_string());
+    }
+
+    let upload_result = (|| -> Result<(), String> {
+        for (index, chunk) in bytes.chunks(chunk_size).enumerate() {
+            host_call(
+                "vault.blob.write",
+                json!({
+                    "key": blob_key,
+                    "uploadId": upload_id,
+                    "index": index as u32,
+                    "data": STANDARD_NO_PAD.encode(chunk)
+                }),
+            )?;
+        }
+        host_call(
+            "vault.blob.commit",
+            json!({ "key": blob_key, "uploadId": upload_id }),
+        )?;
+        Ok(())
+    })();
+
+    if let Err(error) = upload_result {
+        let _ = host_call(
+            "vault.blob.abort",
+            json!({ "key": blob_key, "uploadId": upload_id }),
+        );
+        return Err(error);
+    }
+
+    Ok(json!({
+        "attachment": {
+            "id": params.id,
+            "name": params.name,
+            "mediaType": params.media_type,
+            "size": bytes.len() as u64,
+            "blobKey": blob_key
+        }
+    }))
+}
+
 fn delete_attachment_blob(
     host_call: &mut dyn FnMut(&str, Value) -> Result<Value, String>,
     blob_key: &str,
@@ -1092,6 +1194,11 @@ fn dispatch(
                 .map_err(|error| format!("invalid attachment.delete request: {error}"))?;
             let deleted = delete_attachment_blob(host_call, &params.blob_key)?;
             Ok(json!({ "deleted": deleted }))
+        }
+        "attachment.add_bytes" => {
+            let params: AttachmentAddBytesParams = serde_json::from_value(request.params.clone())
+                .map_err(|error| format!("invalid attachment.add_bytes request: {error}"))?;
+            upload_attachment_bytes(host_call, params)
         }
         "attachment.open" => {
             let params: AttachmentOpenParams = serde_json::from_value(request.params.clone())

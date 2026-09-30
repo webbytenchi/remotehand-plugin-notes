@@ -16,8 +16,11 @@
   "permissions": [
     "vault.documents.read",
     "vault.documents.write",
+    "vault.blobs.read",
+    "vault.blobs.write",
     "vault.access.request",
-    "storage.plugin"
+    "storage.plugin",
+    "files.open"
   ],
   "contributes": {
     "sidebar": [

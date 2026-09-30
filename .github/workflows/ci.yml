@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - "emma/**"
+  pull_request:
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.85"
+          components: rustfmt
+
+      - name: Rust format
+        run: cargo fmt --check
+
+      - name: Rust tests
+        run: cargo test
+
+      - name: Validate plugin manifest
+        shell: pwsh
+        run: |
+          $manifest = Get-Content .\plugin.json -Raw | ConvertFrom-Json
+          if ($manifest.id -ne "remotehand.notes") { throw "Unexpected plugin id" }
+          if ($manifest.version -ne "0.1.0") { throw "Unexpected plugin version" }
+          if ($manifest.apiVersion -ne 1) { throw "Unexpected Plugin API version" }
+
+      - name: Parse panel JavaScript
+        shell: pwsh
+        run: |
+          $html = Get-Content .\ui\index.html -Raw
+          $match = [regex]::Match($html, '(?s)<script>(.*)</script>')
+          if (-not $match.Success) { throw "Panel script not found" }
+          Set-Content -Path .\panel-check.js -Value $match.Groups[1].Value -Encoding utf8
+          node --check .\panel-check.js

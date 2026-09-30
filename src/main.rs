@@ -831,8 +831,8 @@ fn safe_temp_name(name: &str) -> String {
 fn open_system_file(path: &Path) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     let mut command = {
-        let mut command = Command::new("explorer.exe");
-        command.arg(path);
+        let mut command = Command::new("rundll32.exe");
+        command.arg("url.dll,FileProtocolHandler").arg(path);
         command
     };
     #[cfg(target_os = "linux")]

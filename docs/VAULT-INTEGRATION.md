@@ -1,12 +1,20 @@
 # RemoteHand Notes — Vault and Storage Integration Contract
 
-Status: **Design baseline derived from RemoteHand v1.3.0**
+Status: **v0.1.0 implementation contract; original baseline was derived from RemoteHand v1.3.0**
 
 Reviewed host baseline:
 
 - RemoteHand tag: `v1.3.0`
 - Release commit: `bcff5cf290f0aa5c5601521dd221723c055f2ab8`
 - Plugin API version: `1`
+
+Implementation update (2026-10-01):
+
+- Notes v0.1.0 now uses the implemented generic RemoteHand Vault blob API.
+- Required blob permissions are `vault.blobs.read` and `vault.blobs.write`.
+- Attachment open also requires `files.open`.
+- The blob-capable host changes were developed after the existing `v1.3.0` tag; that tag remains immutable.
+- Manual acceptance completed successfully on Windows, including encrypted file/image attachments, previews, open, drag/drop, clipboard image paste, persistence, lock behavior, and deletion cleanup.
 
 This document records what Notes can use from the existing RemoteHand host today and what generic core capability is still required before attachment support is complete.
 
@@ -34,21 +42,22 @@ Notes must never construct or submit a cross-plugin or `core:` Vault reference.
 
 ## 2. Required v0.1.0 manifest permissions
 
-For private Notes data:
+For private Notes data and attachments:
 
 - `vault.documents.read`
 - `vault.documents.write`
+- `vault.blobs.read`
+- `vault.blobs.write`
 - `vault.access.request`
+- `files.open`
 
-For non-private plugin preferences only, Notes may also use:
+For non-private plugin preferences only, Notes also uses:
 
 - `storage.plugin`
 
 Notes does **not** need the deprecated `credentials.use` / `credentials.store` aliases.
 
-Notes does not need `vault.secrets.*` for the initial design because note content is structured private data rather than credential material.
-
-Attachment support will require a future generic Vault blob permission/API if that capability is added to core.
+Notes does not need `vault.secrets.*` because note content is structured private data rather than credential material.
 
 ## 3. Existing host-owned Vault access flow
 
@@ -278,85 +287,34 @@ These are host technical constraints, not Notes product-policy limits.
 
 They are compatible with normal structured note documents but are not suitable for the agreed attachment model where users control attachment limits.
 
-## 10. Attachment gap in RemoteHand v1.3.0
+## 10. Attachment capability added after RemoteHand v1.3.0
 
-The agreed Notes design requires:
+The original v0.1.0 design identified a host capability gap: ordinary Vault documents and the 16 MiB Plugin IPC frame were not appropriate for large binary attachments.
 
-- arbitrary files and images;
-- user-configurable attachment size/count defaults;
-- no arbitrary Notes-level hard ceiling;
-- attachment bytes protected by RemoteHand Vault;
-- separate attachment blobs rather than inline Markdown or giant note documents.
+RemoteHand core now provides a generic caller-scoped encrypted Vault blob API for this purpose. Notes does not store attachment bytes in `vault.document.*`, `storage.plugin`, plaintext sidecars, or Notes-owned encryption.
 
-The current `vault.document.*` API is **not** the correct transport/storage mechanism for this.
+## 11. Implemented generic Vault blob capability
 
-Reasons:
-
-1. Document values are capped at 16 MiB.
-2. IPC itself has a 16 MiB frame bound, so base64 encoding a near-limit binary payload is already unsuitable.
-3. Base64 adds avoidable expansion and memory copies.
-4. The current whole-Vault file is capped at 128 MiB.
-5. Re-encrypting/replacing the whole Vault container for every large attachment operation would scale poorly.
-6. User-configurable attachment limits must not be silently reduced to the current document limit.
-
-Therefore attachment implementation is **blocked on a generic core Vault blob capability**.
-
-Do not work around this by:
-
-- storing plaintext attachment sidecars;
-- placing attachment bytes in `storage.plugin`;
-- inventing Notes-owned encryption;
-- asking core for a raw Vault key;
-- base64-packing large attachments into ordinary Vault documents.
-
-## 11. Proposed generic Vault blob capability
-
-This should be a RemoteHand core feature reusable by Notes and future plugins.
-
-Conceptual permissions:
+Permissions:
 
 - `vault.blobs.read`
 - `vault.blobs.write`
 
-Conceptual operations:
+Methods used by Notes:
 
-- begin blob write
-- stream/chunk blob data
-- commit blob write
-- abort blob write
-- begin blob read
-- stream/chunk blob data
-- delete blob
-- optionally query blob metadata
+- `vault.blob.info`
+- `vault.blob.read`
+- `vault.blob.begin`
+- `vault.blob.write`
+- `vault.blob.commit`
+- `vault.blob.abort`
+- `vault.blob.delete`
 
-Exact method names are not locked by this Notes spec; they should be designed in RemoteHand core.
+The host derives the full Vault namespace from the authenticated plugin identity. Notes supplies only caller-relative blob keys such as `attachment/<id>`.
 
-### Required properties
+The implemented core stores blobs separately from the monolithic Vault document, encrypts them under host-owned keys, transfers them in bounded chunks, uses authenticated per-chunk encryption, and commits uploads through temporary files before final rename. Notes never receives the Vault passphrase, master key, derived key, or raw blob encryption key.
 
-A future blob API should:
-
-- derive namespace from authenticated plugin identity;
-- never expose master/session encryption keys;
-- encrypt attachment payloads in core;
-- support payloads larger than one IPC frame by chunking/streaming;
-- avoid loading an entire large attachment into memory when unnecessary;
-- use bounded chunks;
-- authenticate blob metadata and bytes;
-- use atomic commit semantics so interrupted writes do not replace a valid existing blob;
-- clean up abandoned temporary uploads safely;
-- support deterministic delete;
-- keep logs free of attachment content;
-- allow the user-facing Notes settings to choose operational limits without Notes inventing arbitrary hard caps;
-- impose only genuine implementation/format/resource limits required by core;
-- support future blob-format versioning.
-
-### Physical storage direction
-
-Large blobs should not live inside the current monolithic `vault.enc` document.
-
-A likely generic direction is separately encrypted core-owned blob files under Vault-managed storage, with authenticated headers and caller-scoped identifiers.
-
-The exact file format, key derivation/domain separation, backup behavior, and recovery semantics belong in RemoteHand core design/security review and must not be invented ad hoc by Notes.
+The current core format uses 1 MiB blob chunks and enforces a core implementation bound of 4 GiB per blob. Notes applies its own configurable product defaults separately.
 
 ## 12. Attachment reference lifecycle
 

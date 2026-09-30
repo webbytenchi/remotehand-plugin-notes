@@ -1063,6 +1063,44 @@ fn dispatch(
                 .map_err(|error| format!("invalid attachment.open request: {error}"))?;
             open_attachment(host_call, params)
         }
+        "attachment.preview" => {
+            let params: AttachmentBlobParams = serde_json::from_value(request.params.clone())
+                .map_err(|error| format!("invalid attachment.preview request: {error}"))?;
+            if !params.blob_key.starts_with("attachment/") {
+                return Err("attachment blob key is invalid".to_string());
+            }
+            request_vault_access(host_call)?;
+            let info = host_call("vault.blob.info", json!({ "key": params.blob_key }))?;
+            if info.get("exists") != Some(&Value::Bool(true)) {
+                return Err("attachment blob was not found".to_string());
+            }
+            let size = info.get("size").and_then(Value::as_u64).unwrap_or(u64::MAX);
+            if size > 8 * 1024 * 1024 {
+                return Err("attachment is too large for inline preview".to_string());
+            }
+            let chunks = info
+                .get("chunks")
+                .and_then(Value::as_u64)
+                .ok_or_else(|| "host returned invalid Vault blob info".to_string())?
+                as u32;
+            let mut bytes = Vec::with_capacity(size as usize);
+            for index in 0..chunks {
+                let response = host_call(
+                    "vault.blob.read",
+                    json!({ "key": params.blob_key, "index": index }),
+                )?;
+                let data = response
+                    .get("data")
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| "host returned invalid Vault blob chunk data".to_string())?;
+                bytes.extend_from_slice(
+                    &STANDARD_NO_PAD
+                        .decode(data)
+                        .map_err(|_| "host returned invalid Vault blob chunk encoding".to_string())?,
+                );
+            }
+            Ok(json!({ "data": STANDARD_NO_PAD.encode(bytes) }))
+        }
         "settings.get" => {
             let value = get_settings(host_call)?;
             Ok(if value.is_null() {

@@ -182,6 +182,22 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
   </div>
 </div>
 
+<div id="confirmBackdrop" class="modal-backdrop" hidden>
+  <div class="modal small" role="dialog" aria-modal="true">
+    <div class="modal-header">
+      <strong id="confirmTitle" style="flex:1">Confirm</strong>
+    </div>
+    <div class="modal-body">
+      <p id="confirmMessage" style="margin:0;line-height:1.5"></p>
+    </div>
+    <div class="modal-footer">
+      <span class="spacer"></span>
+      <button id="confirmCancelBtn">Cancel</button>
+      <button id="confirmOkBtn" class="danger">Confirm</button>
+    </div>
+  </div>
+</div>
+
 <script>
 (() => {
   const request = (method, params = null) => window.remotehand.request(method, params);
@@ -225,6 +241,8 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
   let saveChain = Promise.resolve();
   let draggedCardId = null;
   let markdownEditing = false;
+  let loadingNotes = false;
+  let confirmResolve = null;
 
   const nowIso = () => new Date().toISOString();
   const newId = () => crypto.randomUUID();
@@ -272,6 +290,22 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
     if (inOl) html += "</ol>";
     blocks.forEach((block,index) => { html = html.replace("@@CODE"+index+"@@",block); });
     return html || '<span style="opacity:.5">Click to write…</span>';
+  }
+
+  function closeConfirm(value) {
+    $("confirmBackdrop").hidden=true;
+    const resolve=confirmResolve;
+    confirmResolve=null;
+    if(resolve) resolve(value);
+  }
+
+  function askConfirm(title,message,confirmLabel="Confirm") {
+    if(confirmResolve) closeConfirm(false);
+    $("confirmTitle").textContent=title;
+    $("confirmMessage").textContent=message;
+    $("confirmOkBtn").textContent=confirmLabel;
+    $("confirmBackdrop").hidden=false;
+    return new Promise(resolve=>{confirmResolve=resolve;});
   }
 
   function setStatus(message, error=false) {
@@ -580,13 +614,13 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
 
   async function deleteForever() {
     const note=editorDraft;if(!note||note.locked)return;
-    if(settings.confirmPermanentDelete&&!confirm("Permanently delete this note? This cannot be undone."))return;
+    if(settings.confirmPermanentDelete && !(await askConfirm("Delete forever","Permanently delete this note? This cannot be undone.","Delete forever"))) return;
     try{await request("notes.delete",{id:note.id});notes=notes.filter(n=>n.id!==note.id);closeEditor();renderBoard();setStatus("Note permanently deleted.");}
     catch(error){setStatus(String(error),true);}
   }
 
   async function emptyTrash() {
-    if(settings.confirmEmptyTrash&&!confirm("Permanently delete all unlocked notes in Trash? Locked notes will be kept."))return;
+    if(settings.confirmEmptyTrash && !(await askConfirm("Empty Trash","Permanently delete all unlocked notes in Trash? Locked notes will be kept.","Empty Trash"))) return;
     try{
       const result=await request("notes.empty_trash");
       await loadNotes(false);
@@ -619,6 +653,8 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
   }
 
   async function loadNotes(showAccessError=true) {
+    if(loadingNotes) return;
+    loadingNotes=true;
     setStatus("Opening private Notes…");
     try{
       const data=await request("notes.load");
@@ -633,6 +669,8 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
       const message=String(error||"");
       if(/cancel|locked|timeout/i.test(message)){boardHost.hidden=true;lockedVault.hidden=false;setStatus("RemoteHand Vault is locked.");}
       else {setStatus(message,true);if(showAccessError) console.error(error);}
+    } finally {
+      loadingNotes=false;
     }
   }
 
@@ -663,6 +701,9 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
   $("settingsBtn").addEventListener("click",openSettings);
   $("closeSettingsBtn").addEventListener("click",()=>{$("settingsBackdrop").hidden=true;});
   $("saveSettingsBtn").addEventListener("click",saveSettings);
+  $("confirmCancelBtn").addEventListener("click",()=>closeConfirm(false));
+  $("confirmOkBtn").addEventListener("click",()=>closeConfirm(true));
+  $("confirmBackdrop").addEventListener("mousedown",event=>{if(event.target===$("confirmBackdrop"))closeConfirm(false);});
   $("closeEditorBtn").addEventListener("click",closeEditor);
   $("lockBtn").addEventListener("click",toggleLock);
   $("convertBtn").addEventListener("click",convertNoteType);
@@ -689,6 +730,7 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
   window.addEventListener("keydown",event=>{
     const key=event.key.toLowerCase();
     if(event.key==="Escape"){
+      if(!$("confirmBackdrop").hidden){closeConfirm(false);event.preventDefault();return;}
       if(!$("settingsBackdrop").hidden){$("settingsBackdrop").hidden=true;event.preventDefault();return;}
       if(!editorBackdrop.hidden){closeEditor();event.preventDefault();return;}
     }
@@ -710,7 +752,7 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
       if(payload.unlocked===false){
         redactForVaultLock();
       }else if(payload.unlocked===true&&boardHost.hidden){
-        void loadNotes(false);
+        setStatus("RemoteHand Vault is unlocked. Open Notes to reload your private notes.");
       }
     });
   }

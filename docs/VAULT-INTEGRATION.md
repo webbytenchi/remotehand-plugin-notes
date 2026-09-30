@@ -484,3 +484,28 @@ The first acceptance failure presented as `failed to read plugin frame length: f
 RemoteHand plugin panels intentionally run without browser modal-dialog permission. Notes therefore must not rely on native `alert()`, `confirm()`, or `prompt()` for product flows.
 
 Destructive confirmations such as permanent delete and Empty Trash use Notes-owned modal UI inside the panel.
+
+
+## 18. Blob implementation checkpoint
+
+The generic blob capability described above is now implemented for validation on RemoteHand branch `emma/vault-blob-api`.
+
+Current host surface:
+
+- `vault.blobs.read`
+- `vault.blobs.write`
+- `vault.blob.begin`
+- `vault.blob.write`
+- `vault.blob.commit`
+- `vault.blob.abort`
+- `vault.blob.info`
+- `vault.blob.read`
+- `vault.blob.delete`
+
+Core uses 1 MiB authenticated chunks, a 4 GiB implementation bound per blob, opaque keyed filenames, domain-separated per-blob encryption keys, and XChaCha20-Poly1305. Blob creation is staged and immutable: a committed key must be deleted before reuse.
+
+Notes attachment integration now includes picker upload, native file-drop path upload, metadata references in note documents, attachment reordering, inline image previews up to 8 MiB, open-with-system-app, and blob cleanup after attachment/note deletion.
+
+Opening a general attachment for an external system application necessarily materializes a plaintext copy in the operating-system temp directory. Notes gives the file a randomized temporary path, schedules cleanup retries, and clears stale Notes temp files on the next plugin start. This temporary external-view copy is not used as persistent Notes storage.
+
+The image compression/resize setting remains reserved until its exact transformation policy is finalized. The current attachment path preserves original file bytes.

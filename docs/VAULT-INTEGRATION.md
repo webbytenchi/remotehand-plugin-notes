@@ -460,3 +460,27 @@ Notes uses this notification to immediately clear decrypted UI state when `statu
 This is a generic RemoteHand plugin capability and is not Notes-specific policy.
 
 The existing RemoteHand `v1.3.0` tag remains unchanged. This host-event addition lives after that tagged checkpoint and must follow normal RemoteHand validation before merge/release.
+
+
+### Re-entrant unlock request rule
+
+The first manual acceptance pass exposed an important IPC rule for Notes.
+
+When a Notes call such as `notes.load` invokes `vault.request_access`, the plugin runtime is synchronously waiting for the corresponding host response. RemoteHand may emit `vault.status { unlocked: true }` as part of that same successful unlock.
+
+Notes must **not** start a second `notes.load` merely because that unlocked notification arrived. Doing so can place a new `host.request` on the framed plugin stream while the plugin is waiting for the previous `host.response`, desynchronizing the synchronous Plugin API v1 request flow.
+
+Accepted behavior:
+
+- react immediately to `unlocked: false` by redacting decrypted UI;
+- do not issue a new host request solely from `unlocked: true`;
+- let the original `vault.request_access` caller resume and finish loading;
+- guard Notes loading against concurrent duplicate calls.
+
+The first acceptance failure presented as `failed to read plugin frame length: failed to fill whole buffer` after the plugin process exited from the desynchronized request flow.
+
+### Sandboxed confirmation rule
+
+RemoteHand plugin panels intentionally run without browser modal-dialog permission. Notes therefore must not rely on native `alert()`, `confirm()`, or `prompt()` for product flows.
+
+Destructive confirmations such as permanent delete and Empty Trash use Notes-owned modal UI inside the panel.

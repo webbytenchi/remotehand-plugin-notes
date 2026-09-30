@@ -133,6 +133,15 @@ struct AttachmentBlobParams {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct AttachmentAddPathParams {
+    id: String,
+    path: String,
+    existing_total_bytes: u64,
+    existing_count: u64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct AttachmentOpenParams {
     blob_key: String,
     name: String,
@@ -653,25 +662,16 @@ fn validate_attachment_limits(
     Ok(())
 }
 
-fn upload_attachment(
+fn upload_attachment_from_path(
     host_call: &mut dyn FnMut(&str, Value) -> Result<Value, String>,
-    params: AttachmentAddParams,
+    id: String,
+    path: PathBuf,
+    existing_total_bytes: u64,
+    existing_count: u64,
 ) -> Result<Value, String> {
-    validate_note_id(&params.id)?;
+    validate_note_id(&id)?;
     request_vault_access(host_call)?;
 
-    let opened = host_call(
-        "file.open",
-        json!({ "filters": [{ "name": "Files", "extensions": ["*"] }] }),
-    )?;
-    if opened.get("opened") == Some(&Value::Bool(false)) {
-        return Ok(json!({ "opened": false }));
-    }
-    let path_text = opened
-        .get("path")
-        .and_then(Value::as_str)
-        .ok_or_else(|| "host file.open did not return a path".to_string())?;
-    let path = PathBuf::from(path_text);
     let metadata = fs::symlink_metadata(&path)
         .map_err(|error| format!("cannot inspect attachment: {error}"))?;
     if !metadata.file_type().is_file() || metadata.file_type().is_symlink() {
@@ -691,11 +691,11 @@ fn upload_attachment(
         &settings,
         size,
         &mime_type,
-        params.existing_total_bytes,
-        params.existing_count,
+        existing_total_bytes,
+        existing_count,
     )?;
 
-    let blob_key = format!("attachment/{}", params.id);
+    let blob_key = format!("attachment/{id}");
     let begin = host_call(
         "vault.blob.begin",
         json!({ "key": blob_key, "size": size }),
@@ -757,13 +757,37 @@ fn upload_attachment(
     Ok(json!({
         "opened": true,
         "attachment": {
-            "id": params.id,
+            "id": id,
             "name": name,
             "mediaType": mime_type,
             "size": size,
             "blobKey": blob_key
         }
     }))
+}
+
+fn upload_attachment(
+    host_call: &mut dyn FnMut(&str, Value) -> Result<Value, String>,
+    params: AttachmentAddParams,
+) -> Result<Value, String> {
+    let opened = host_call(
+        "file.open",
+        json!({ "filters": [{ "name": "Files", "extensions": ["*"] }] }),
+    )?;
+    if opened.get("opened") == Some(&Value::Bool(false)) {
+        return Ok(json!({ "opened": false }));
+    }
+    let path = opened
+        .get("path")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "host file.open did not return a path".to_string())?;
+    upload_attachment_from_path(
+        host_call,
+        params.id,
+        PathBuf::from(path),
+        params.existing_total_bytes,
+        params.existing_count,
+    )
 }
 
 fn delete_attachment_blob(
@@ -1052,6 +1076,17 @@ fn dispatch(
                 .map_err(|error| format!("invalid attachment.add request: {error}"))?;
             upload_attachment(host_call, params)
         }
+        "attachment.add_path" => {
+            let params: AttachmentAddPathParams = serde_json::from_value(request.params.clone())
+                .map_err(|error| format!("invalid attachment.add_path request: {error}"))?;
+            upload_attachment_from_path(
+                host_call,
+                params.id,
+                PathBuf::from(params.path),
+                params.existing_total_bytes,
+                params.existing_count,
+            )
+        }
         "attachment.delete" => {
             let params: AttachmentBlobParams = serde_json::from_value(request.params.clone())
                 .map_err(|error| format!("invalid attachment.delete request: {error}"))?;
@@ -1118,7 +1153,22 @@ fn dispatch(
     }
 }
 
+
+fn cleanup_attachment_temp_files() {
+    let root = std::env::temp_dir().join("RemoteHand").join("Notes");
+    let Ok(entries) = fs::read_dir(&root) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_file() {
+            let _ = fs::remove_file(path);
+        }
+    }
+}
+
 fn run() -> Result<(), String> {
+    cleanup_attachment_temp_files();
     let mut stdin = io::stdin().lock();
     let mut stdout = io::stdout().lock();
 

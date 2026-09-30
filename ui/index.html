@@ -683,7 +683,16 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
   });
 
   if(window.remotehand&&typeof window.remotehand.onEvent==="function"){
-    window.remotehand.onEvent("vault.status",payload=>{if(payload&&payload.locked){notes=[];boardHost.hidden=true;lockedVault.hidden=false;closeEditor();setStatus("RemoteHand Vault is locked.");}});
+    window.remotehand.onEvent("vault.status",payload=>{
+      if(!payload)return;
+      if(payload.unlocked===false){
+        notes=[];boardHost.hidden=true;lockedVault.hidden=false;
+        if(!editorBackdrop.hidden) closeEditor();
+        setStatus("RemoteHand Vault is locked.");
+      }else if(payload.unlocked===true&&boardHost.hidden){
+        void loadNotes(false);
+      }
+    });
   }
 
   void loadNotes(false);

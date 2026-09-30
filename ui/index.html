@@ -145,6 +145,7 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
     <div class="modal-footer">
       <span id="saveState">Saved</span>
       <span class="spacer"></span>
+      <button id="convertBtn">Convert to checklist</button>
       <button id="restoreBtn" hidden>Restore to Notes</button>
       <button id="archiveBtn">Archive</button>
       <button id="trashBtn" class="danger">Move to Trash</button>
@@ -289,11 +290,21 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
 
   function orderedNotes(view) {
     const query = searchInput.value.trim().toLowerCase();
-    let list = notes.filter(note => note.location === view && (!query || noteText(note).includes(query)));
+    const searchLocations = query && view !== "trash" ? new Set(["main","archive"]) : new Set([view]);
+    let list = notes.filter(note => searchLocations.has(note.location) && (!query || noteText(note).includes(query)));
     const sort = sortSelect.value;
     if (sort === "manual") {
-      const order = catalog.manualOrder[view] || [];
+      const order = view === "main" ? catalog.manualOrder.main || [] : catalog.manualOrder[view] || [];
       list.sort((a,b) => {
+        if (query && a.location !== b.location) return a.location === "main" ? -1 : 1;
+        if (view === "main" && !query && a.pinned && b.pinned) {
+          const ai = catalog.pinnedOrder.indexOf(a.id), bi = catalog.pinnedOrder.indexOf(b.id);
+          if (ai >= 0 || bi >= 0) {
+            if (ai < 0) return 1;
+            if (bi < 0) return -1;
+            return ai-bi;
+          }
+        }
         const ai = order.indexOf(a.id), bi = order.indexOf(b.id);
         if (ai < 0 && bi < 0) return String(b.updatedAt).localeCompare(String(a.updatedAt));
         if (ai < 0) return 1;
@@ -330,7 +341,13 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
       '<div class="card-title">'+esc(note.title||"Untitled")+'</div>'+content+
       (labels?'<div class="labels">'+labels+'</div>':"")+
       '<div class="meta"><span>'+new Date(note.updatedAt||note.createdAt).toLocaleString()+'</span>'+
+      (searchInput.value.trim() && note.location==="archive"?'<span>Archived</span>':"")+
       ((note.attachments||[]).length?'<span>📎 '+note.attachments.length+'</span>':"")+'</div>';
+    el.querySelectorAll(".label").forEach((chip,index)=>chip.addEventListener("click",event=>{
+      event.stopPropagation();
+      searchInput.value=(note.labels||[])[index]||"";
+      renderBoard();
+    }));
     el.addEventListener("click",()=>openEditor(note.id));
     el.addEventListener("dragstart",event=>{draggedCardId=note.id;el.classList.add("dragging");event.dataTransfer.effectAllowed="move";});
     el.addEventListener("dragend",()=>{draggedCardId=null;el.classList.remove("dragging");document.querySelectorAll(".drop-target").forEach(x=>x.classList.remove("drop-target"));});
@@ -411,7 +428,7 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
   async function createNote(type) {
     const note=makeNote(type);notes.push(note);catalog.noteIds.push(note.id);catalog.manualOrder.main.unshift(note.id);
     renderBoard();openEditor(note.id);
-    try{await saveDraft(true);}catch(error){setStatus(String(error),true);}
+    try{await saveDraft(true);await persistCatalog();}catch(error){setStatus(String(error),true);}
   }
 
   function syncDraftFromFields() {
@@ -483,6 +500,8 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
     $("deleteForeverBtn").hidden=note.location!=="trash";
     $("deleteForeverBtn").disabled=note.locked;
     $("restoreBtn").disabled=false;
+    $("convertBtn").disabled=note.locked;
+    $("convertBtn").textContent=note.type==="note"?"Convert to checklist":"Convert to note";
     saveState.textContent="Saved";
   }
 
@@ -520,6 +539,24 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
   }
   function removeChecklistItem(id){if(editorDraft?.locked)return;editorDraft.checklist=editorDraft.checklist.filter(x=>x.id!==id);markDirty();renderChecklistEditor();}
   function reorderChecklist(source,target){if(editorDraft?.locked)return;const list=editorDraft.checklist;const from=list.findIndex(x=>x.id===source),to=list.findIndex(x=>x.id===target);if(from<0||to<0)return;list.splice(to,0,list.splice(from,1)[0]);markDirty();renderChecklistEditor();}
+
+  function convertNoteType() {
+    if(!editorDraft||editorDraft.locked)return;
+    syncDraftFromFields();
+    if(editorDraft.type==="note"){
+      const lines=String(editorDraft.body||"").split(/\r?\n/).map(line=>line.trim()).filter(Boolean);
+      editorDraft.checklist=lines.map(text=>({id:newId(),text,done:false}));
+      editorDraft.body="";
+      editorDraft.type="checklist";
+    }else{
+      editorDraft.body=(editorDraft.checklist||[]).map(item=>"- "+(item.done?"✓ ":"☐ ")+(item.text||"")).join("\n");
+      editorDraft.checklist=[];
+      editorDraft.type="note";
+    }
+    editorDraft.updatedAt=nowIso();
+    markDirty();
+    renderEditor();
+  }
 
   async function toggleLock() {
     if(!editorDraft)return;
@@ -603,6 +640,7 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
   $("saveSettingsBtn").addEventListener("click",saveSettings);
   $("closeEditorBtn").addEventListener("click",closeEditor);
   $("lockBtn").addEventListener("click",toggleLock);
+  $("convertBtn").addEventListener("click",convertNoteType);
   $("pinBtn").addEventListener("click",()=>{if(!editorDraft||editorDraft.locked)return;editorDraft.pinned=!editorDraft.pinned;markDirty();renderEditor();});
   $("archiveBtn").addEventListener("click",()=>changeLocation("archive"));
   $("trashBtn").addEventListener("click",()=>changeLocation("trash"));

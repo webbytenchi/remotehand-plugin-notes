@@ -645,6 +645,41 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
     }
   }
 
+  async function addAttachmentPath(path) {
+    if(!editorDraft||editorDraft.locked||!path)return false;
+    syncDraftFromFields();
+    clearTimeout(autosaveTimer);
+    const before=clone(editorDraft.attachments||[]);
+    const existingTotal=before.reduce((sum,item)=>sum+(Number(item.size)||0),0);
+    saveState.textContent="Adding attachment…";
+    try{
+      const result=await request("attachment.add_path",{
+        id:newId(),
+        path,
+        existingTotalBytes:existingTotal,
+        existingCount:before.length
+      });
+      if(!result?.attachment){saveState.textContent="Saved";return false;}
+      editorDraft.attachments=[...before,result.attachment];
+      editorDraft.updatedAt=nowIso();
+      try{
+        await saveDraft(true);
+      }catch(error){
+        editorDraft.attachments=before;
+        await request("attachment.delete",{blobKey:result.attachment.blobKey}).catch(()=>{});
+        renderAttachments();
+        throw error;
+      }
+      renderEditor();
+      setStatus("Attachment encrypted and saved in RemoteHand Vault.");
+      return true;
+    }catch(error){
+      saveState.textContent="Save failed";
+      setStatus(String(error),true);
+      return false;
+    }
+  }
+
   async function removeAttachment(id) {
     if(!editorDraft||editorDraft.locked)return;
     const attachment=(editorDraft.attachments||[]).find(item=>item.id===id);
@@ -899,6 +934,24 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
       }else if(payload.unlocked===true&&boardHost.hidden){
         setStatus("RemoteHand Vault is unlocked. Open Notes to reload your private notes.");
       }
+    });
+    window.remotehand.onEvent("files.drop",payload=>{
+      const paths=payload&&Array.isArray(payload.paths)?payload.paths.filter(path=>typeof path==="string"&&path.trim()):[];
+      if(paths.length===0)return;
+      if(editorBackdrop.hidden||!editorDraft){
+        setStatus("Open a note or checklist before dropping attachments.",true);
+        return;
+      }
+      if(editorDraft.locked){
+        setStatus("Unlock this note before adding attachments.",true);
+        return;
+      }
+      void (async()=>{
+        for(const path of paths){
+          const added=await addAttachmentPath(path);
+          if(!added)break;
+        }
+      })();
     });
   }
 

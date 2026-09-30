@@ -246,6 +246,7 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
   let loadingNotes = false;
   let confirmResolve = null;
   let draggedAttachmentId = null;
+  let attachmentPreviewGeneration = 0;
   const attachmentPreviewUrls = new Map();
 
   const nowIso = () => new Date().toISOString();
@@ -321,16 +322,12 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
   }
 
   function revokeAttachmentPreviews() {
-    for(const url of attachmentPreviewUrls.values()) URL.revokeObjectURL(url);
     attachmentPreviewUrls.clear();
   }
 
-  function base64NoPadToBlobUrl(data,mediaType) {
+  function base64NoPadToDataUrl(data,mediaType) {
     const padded=data+"=".repeat((4-data.length%4)%4);
-    const binary=atob(padded);
-    const bytes=new Uint8Array(binary.length);
-    for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);
-    return URL.createObjectURL(new Blob([bytes],{type:mediaType||"application/octet-stream"}));
+    return "data:"+(mediaType||"application/octet-stream")+";base64,"+padded;
   }
 
   function setStatus(message, error=false) {
@@ -571,10 +568,13 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
 
   function renderAttachments() {
     const note=editorDraft;
+    attachmentPreviewGeneration+=1;
+    const generation=attachmentPreviewGeneration;
     revokeAttachmentPreviews();
     attachmentList.replaceChildren();
     if(!note)return;
     const attachments=Array.isArray(note.attachments)?note.attachments:[];
+    const previewQueue=[];
     for(const attachment of attachments){
       const row=document.createElement("div");
       row.className="attachment-row";
@@ -602,15 +602,34 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
       attachmentList.append(row);
 
       if(String(attachment.mediaType||"").startsWith("image/") && Number(attachment.size)<=8*1024*1024){
-        void request("attachment.preview",{blobKey:attachment.blobKey}).then(result=>{
-          if(!editorDraft||!attachmentList.contains(row)||!result?.data)return;
-          const url=base64NoPadToBlobUrl(result.data,attachment.mediaType);
-          attachmentPreviewUrls.set(attachment.id,url);
-          thumb.textContent="";
-          const img=document.createElement("img");img.src=url;img.alt="";thumb.append(img);
-        }).catch(()=>{});
+        previewQueue.push({attachment,row,thumb});
       }
     }
+
+    void (async()=>{
+      for(const item of previewQueue){
+        if(generation!==attachmentPreviewGeneration||!editorDraft)return;
+        try{
+          const result=await request("attachment.preview",{blobKey:item.attachment.blobKey});
+          if(generation!==attachmentPreviewGeneration||!editorDraft||!attachmentList.contains(item.row)||!result?.data)continue;
+          const url=base64NoPadToDataUrl(result.data,item.attachment.mediaType);
+          attachmentPreviewUrls.set(item.attachment.id,url);
+          item.thumb.textContent="";
+          const img=document.createElement("img");
+          img.alt=item.attachment.name||"Image attachment";
+          img.src=url;
+          img.addEventListener("error",()=>{
+            item.thumb.replaceChildren();
+            item.thumb.textContent="🖼";
+            item.thumb.title="Preview unavailable";
+          },{once:true});
+          item.thumb.append(img);
+        }catch(error){
+          if(generation!==attachmentPreviewGeneration)return;
+          item.thumb.title="Preview unavailable: "+String(error);
+        }
+      }
+    })();
   }
 
   async function addAttachment() {

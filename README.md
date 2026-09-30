@@ -20,9 +20,10 @@ The current foundation includes:
 - autosave
 - Notes-specific settings
 - Trash protection for locked notes
-- attachment UI/storage model placeholder
+- encrypted file/image attachment storage through RemoteHand Vault blobs
+- attachment picker, drag-and-drop, reorder, image preview, open, and cleanup lifecycle
 
-Actual attachment bytes are deliberately **not** persisted yet. Full attachment persistence requires the generic RemoteHand Vault encrypted-blob capability described in [docs/VAULT-INTEGRATION.md](docs/VAULT-INTEGRATION.md).
+Attachment bytes are persisted only through RemoteHand's encrypted Vault blob API. Normal note metadata stores opaque attachment references; attachment payloads are never placed in plaintext plugin storage.
 
 See [docs/V0.1.0-SPEC.md](docs/V0.1.0-SPEC.md) for the approved product design.
 
@@ -34,7 +35,7 @@ See [docs/V0.1.0-SPEC.md](docs/V0.1.0-SPEC.md) for the approved product design.
 - Vault-encrypted note content and private metadata
 - Labels/tags rather than folders
 - Pinning, colors, search, archive, Trash, and note locking
-- File and image attachments after the core Vault blob API exists
+- File and image attachments backed by the core Vault blob API
 - Autosave
 - Manual card rearranging plus automatic sort modes
 

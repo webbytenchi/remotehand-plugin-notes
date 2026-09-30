@@ -1,7 +1,13 @@
+use base64::{engine::general_purpose::STANDARD_NO_PAD, Engine as _};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::BTreeSet;
+use std::fs::{self, OpenOptions};
 use std::io::{self, ErrorKind, Read, Write};
+use std::path::{Path, PathBuf};
+use std::process::Command;
+use std::thread;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 const PLUGIN_ID: &str = "remotehand.notes";
 const PLUGIN_VERSION: &str = "0.1.0";
@@ -13,8 +19,11 @@ const SETTINGS_KEY: &str = "settings-v1";
 const REQUIRED_PERMISSIONS: &[&str] = &[
     "vault.documents.read",
     "vault.documents.write",
+    "vault.blobs.read",
+    "vault.blobs.write",
     "vault.access.request",
     "storage.plugin",
+    "files.open",
 ];
 
 #[derive(Serialize)]
@@ -106,6 +115,27 @@ struct DeleteNoteParams {
 #[serde(rename_all = "camelCase")]
 struct SettingsSetParams {
     settings: Value,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AttachmentAddParams {
+    id: String,
+    existing_total_bytes: u64,
+    existing_count: u64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AttachmentBlobParams {
+    blob_key: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AttachmentOpenParams {
+    blob_key: String,
+    name: String,
 }
 
 fn write_frame<W: Write, T: Serialize>(writer: &mut W, value: &T) -> Result<(), String> {
@@ -528,27 +558,389 @@ fn set_settings(
     Ok(json!({ "stored": true, "settings": settings }))
 }
 
+
+fn attachment_blob_keys(note: &Value) -> Vec<String> {
+    note.get("attachments")
+        .and_then(Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|item| item.get("blobKey").and_then(Value::as_str))
+                .filter(|key| key.starts_with("attachment/"))
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn settings_u64(settings: &Value, key: &str, default: u64) -> u64 {
+    settings.get(key).and_then(Value::as_u64).unwrap_or(default)
+}
+
+fn attachment_mime_type(path: &Path) -> &'static str {
+    match path
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "bmp" => "image/bmp",
+        "svg" => "image/svg+xml",
+        "pdf" => "application/pdf",
+        "txt" => "text/plain",
+        "md" | "markdown" => "text/markdown",
+        "json" => "application/json",
+        "zip" => "application/zip",
+        _ => "application/octet-stream",
+    }
+}
+
+fn is_image_mime(value: &str) -> bool {
+    value.starts_with("image/")
+}
+
+fn limit_bytes(mib: u64) -> Option<u64> {
+    if mib == 0 {
+        None
+    } else {
+        mib.checked_mul(1024 * 1024)
+    }
+}
+
+fn validate_attachment_limits(
+    settings: &Value,
+    size: u64,
+    mime_type: &str,
+    existing_total_bytes: u64,
+    existing_count: u64,
+) -> Result<(), String> {
+    let max_count = settings_u64(settings, "maxAttachments", 10);
+    if max_count != 0 && existing_count >= max_count {
+        return Err(format!("note already has the configured maximum of {max_count} attachments"));
+    }
+
+    let per_file_mib = if is_image_mime(mime_type) {
+        settings_u64(settings, "maxImageMiB", 8)
+    } else {
+        settings_u64(settings, "maxFileMiB", 10)
+    };
+    if let Some(limit) = limit_bytes(per_file_mib) {
+        if size > limit {
+            return Err(format!(
+                "attachment exceeds the configured {} MiB {} limit",
+                per_file_mib,
+                if is_image_mime(mime_type) { "image" } else { "file" }
+            ));
+        }
+    }
+
+    let total_mib = settings_u64(settings, "maxTotalAttachmentMiB", 50);
+    if let Some(limit) = limit_bytes(total_mib) {
+        let total = existing_total_bytes
+            .checked_add(size)
+            .ok_or_else(|| "attachment total size overflowed".to_string())?;
+        if total > limit {
+            return Err(format!(
+                "attachments exceed the configured {total_mib} MiB per-note total"
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn upload_attachment(
+    host_call: &mut dyn FnMut(&str, Value) -> Result<Value, String>,
+    params: AttachmentAddParams,
+) -> Result<Value, String> {
+    validate_note_id(&params.id)?;
+    request_vault_access(host_call)?;
+
+    let opened = host_call(
+        "file.open",
+        json!({ "filters": [{ "name": "Files", "extensions": ["*"] }] }),
+    )?;
+    if opened.get("opened") == Some(&Value::Bool(false)) {
+        return Ok(json!({ "opened": false }));
+    }
+    let path_text = opened
+        .get("path")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "host file.open did not return a path".to_string())?;
+    let path = PathBuf::from(path_text);
+    let metadata = fs::symlink_metadata(&path)
+        .map_err(|error| format!("cannot inspect attachment: {error}"))?;
+    if !metadata.file_type().is_file() || metadata.file_type().is_symlink() {
+        return Err("attachment must be a regular file".to_string());
+    }
+
+    let name = path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| "attachment filename is invalid".to_string())?
+        .to_string();
+    let size = metadata.len();
+    let mime_type = attachment_mime_type(&path).to_string();
+    let settings = sanitize_settings(get_settings(host_call)?);
+    validate_attachment_limits(
+        &settings,
+        size,
+        &mime_type,
+        params.existing_total_bytes,
+        params.existing_count,
+    )?;
+
+    let blob_key = format!("attachment/{}", params.id);
+    let begin = host_call(
+        "vault.blob.begin",
+        json!({ "key": blob_key, "size": size }),
+    )?;
+    let upload_id = begin
+        .get("uploadId")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "host did not return a Vault blob upload id".to_string())?
+        .to_string();
+    let chunk_size = begin
+        .get("chunkSize")
+        .and_then(Value::as_u64)
+        .ok_or_else(|| "host did not return a Vault blob chunk size".to_string())?
+        as usize;
+    if chunk_size == 0 || chunk_size > 4 * 1024 * 1024 {
+        return Err("host returned an invalid Vault blob chunk size".to_string());
+    }
+
+    let upload_result = (|| -> Result<(), String> {
+        let mut file = OpenOptions::new()
+            .read(true)
+            .open(&path)
+            .map_err(|error| format!("cannot read attachment: {error}"))?;
+        let mut index = 0u32;
+        let mut remaining = size;
+        while remaining > 0 {
+            let length = remaining.min(chunk_size as u64) as usize;
+            let mut bytes = vec![0u8; length];
+            file.read_exact(&mut bytes)
+                .map_err(|error| format!("cannot read attachment: {error}"))?;
+            let data = STANDARD_NO_PAD.encode(bytes);
+            host_call(
+                "vault.blob.write",
+                json!({
+                    "key": blob_key,
+                    "uploadId": upload_id,
+                    "index": index,
+                    "data": data
+                }),
+            )?;
+            remaining -= length as u64;
+            index += 1;
+        }
+        host_call(
+            "vault.blob.commit",
+            json!({ "key": blob_key, "uploadId": upload_id }),
+        )?;
+        Ok(())
+    })();
+
+    if let Err(error) = upload_result {
+        let _ = host_call(
+            "vault.blob.abort",
+            json!({ "key": blob_key, "uploadId": upload_id }),
+        );
+        return Err(error);
+    }
+
+    Ok(json!({
+        "opened": true,
+        "attachment": {
+            "id": params.id,
+            "name": name,
+            "mediaType": mime_type,
+            "size": size,
+            "blobKey": blob_key
+        }
+    }))
+}
+
+fn delete_attachment_blob(
+    host_call: &mut dyn FnMut(&str, Value) -> Result<Value, String>,
+    blob_key: &str,
+) -> Result<bool, String> {
+    if !blob_key.starts_with("attachment/") {
+        return Err("attachment blob key is invalid".to_string());
+    }
+    request_vault_access(host_call)?;
+    let result = host_call("vault.blob.delete", json!({ "key": blob_key }))?;
+    Ok(result
+        .get("deleted")
+        .and_then(Value::as_bool)
+        .unwrap_or(false))
+}
+
+fn safe_temp_name(name: &str) -> String {
+    let base = Path::new(name)
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or("attachment");
+    let cleaned: String = base
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || matches!(ch, '.' | '-' | '_' | ' ') {
+                ch
+            } else {
+                '_'
+            }
+        })
+        .take(160)
+        .collect();
+    if cleaned.trim().is_empty() {
+        "attachment".to_string()
+    } else {
+        cleaned
+    }
+}
+
+fn open_system_file(path: &Path) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    let mut command = {
+        let mut command = Command::new("explorer.exe");
+        command.arg(path);
+        command
+    };
+    #[cfg(target_os = "linux")]
+    let mut command = {
+        let mut command = Command::new("xdg-open");
+        command.arg(path);
+        command
+    };
+    #[cfg(target_os = "macos")]
+    let mut command = {
+        let mut command = Command::new("open");
+        command.arg(path);
+        command
+    };
+    #[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
+    return Err("opening attachments is unsupported on this platform".to_string());
+
+    command.spawn().map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+fn open_attachment(
+    host_call: &mut dyn FnMut(&str, Value) -> Result<Value, String>,
+    params: AttachmentOpenParams,
+) -> Result<Value, String> {
+    if !params.blob_key.starts_with("attachment/") {
+        return Err("attachment blob key is invalid".to_string());
+    }
+    request_vault_access(host_call)?;
+    let info = host_call("vault.blob.info", json!({ "key": params.blob_key }))?;
+    if info.get("exists") != Some(&Value::Bool(true)) {
+        return Err("attachment blob was not found".to_string());
+    }
+    let chunks = info
+        .get("chunks")
+        .and_then(Value::as_u64)
+        .ok_or_else(|| "host returned invalid Vault blob info".to_string())?
+        as u32;
+
+    let temp_root = std::env::temp_dir().join("RemoteHand").join("Notes");
+    fs::create_dir_all(&temp_root).map_err(|error| error.to_string())?;
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    let temp_path = temp_root.join(format!(
+        "{}-{}-{}",
+        std::process::id(),
+        unique,
+        safe_temp_name(&params.name)
+    ));
+
+    let result = (|| -> Result<(), String> {
+        let mut file = OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .open(&temp_path)
+            .map_err(|error| error.to_string())?;
+        for index in 0..chunks {
+            let response = host_call(
+                "vault.blob.read",
+                json!({ "key": params.blob_key, "index": index }),
+            )?;
+            let data = response
+                .get("data")
+                .and_then(Value::as_str)
+                .ok_or_else(|| "host returned invalid Vault blob chunk data".to_string())?;
+            let bytes = STANDARD_NO_PAD
+                .decode(data)
+                .map_err(|_| "host returned invalid Vault blob chunk encoding".to_string())?;
+            file.write_all(&bytes).map_err(|error| error.to_string())?;
+        }
+        file.flush().map_err(|error| error.to_string())?;
+        file.sync_all().map_err(|error| error.to_string())?;
+        open_system_file(&temp_path)?;
+        Ok(())
+    })();
+
+    if let Err(error) = result {
+        let _ = fs::remove_file(&temp_path);
+        return Err(error);
+    }
+
+    let cleanup = temp_path.clone();
+    thread::spawn(move || {
+        for _ in 0..30 {
+            thread::sleep(Duration::from_secs(60));
+            match fs::remove_file(&cleanup) {
+                Ok(()) => return,
+                Err(error) if error.kind() == ErrorKind::NotFound => return,
+                Err(_) => {}
+            }
+        }
+    });
+
+    Ok(json!({ "opened": true }))
+}
+
 fn permanent_delete(
     host_call: &mut dyn FnMut(&str, Value) -> Result<Value, String>,
     id: &str,
 ) -> Result<Value, String> {
     request_vault_access(host_call)?;
     validate_note_id(id)?;
-    if let Some(note) = load_note(host_call, id)? {
-        if is_locked(&note) {
+    let note = load_note(host_call, id)?;
+    if let Some(note) = note.as_ref() {
+        if is_locked(note) {
             return Err("locked note cannot be permanently deleted".to_string());
         }
-        if location(&note) != "trash" {
+        if location(note) != "trash" {
             return Err("permanent delete is only allowed from Trash".to_string());
         }
     }
+    let blob_keys = note.as_ref().map(attachment_blob_keys).unwrap_or_default();
 
     let deleted = delete_document(host_call, &note_key(id))?;
     let mut catalog = load_catalog(host_call)?;
     remove_id_from_catalog(&mut catalog, id);
     save_catalog(host_call, &catalog)?;
 
-    Ok(json!({ "deleted": deleted, "id": id }))
+    let mut orphaned_attachments = 0usize;
+    for blob_key in blob_keys {
+        if delete_attachment_blob(host_call, &blob_key).is_err() {
+            orphaned_attachments += 1;
+        }
+    }
+
+    Ok(json!({
+        "deleted": deleted,
+        "id": id,
+        "orphanedAttachments": orphaned_attachments
+    }))
 }
 
 fn empty_trash(
@@ -573,10 +965,14 @@ fn empty_trash(
             kept_locked += 1;
             continue;
         }
+        let blob_keys = attachment_blob_keys(&note);
         if delete_document(host_call, &note_key(&id))? {
             deleted += 1;
         }
         remove_id_from_catalog(&mut catalog, &id);
+        for blob_key in blob_keys {
+            let _ = delete_attachment_blob(host_call, &blob_key);
+        }
     }
 
     if let Some(ids) = catalog.get("noteIds").and_then(Value::as_array) {
@@ -651,6 +1047,22 @@ fn dispatch(
             permanent_delete(host_call, &params.id)
         }
         "notes.empty_trash" => empty_trash(host_call),
+        "attachment.add" => {
+            let params: AttachmentAddParams = serde_json::from_value(request.params.clone())
+                .map_err(|error| format!("invalid attachment.add request: {error}"))?;
+            upload_attachment(host_call, params)
+        }
+        "attachment.delete" => {
+            let params: AttachmentBlobParams = serde_json::from_value(request.params.clone())
+                .map_err(|error| format!("invalid attachment.delete request: {error}"))?;
+            let deleted = delete_attachment_blob(host_call, &params.blob_key)?;
+            Ok(json!({ "deleted": deleted }))
+        }
+        "attachment.open" => {
+            let params: AttachmentOpenParams = serde_json::from_value(request.params.clone())
+                .map_err(|error| format!("invalid attachment.open request: {error}"))?;
+            open_attachment(host_call, params)
+        }
         "settings.get" => {
             let value = get_settings(host_call)?;
             Ok(if value.is_null() {

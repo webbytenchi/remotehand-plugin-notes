@@ -645,6 +645,92 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
     }
   }
 
+  async function prepareClipboardImage(file) {
+    if(!file)return null;
+    if(settings.imageCompression){
+      try{
+        const bitmap=await createImageBitmap(file);
+        const canvas=document.createElement("canvas");
+        canvas.width=bitmap.width;
+        canvas.height=bitmap.height;
+        const context=canvas.getContext("2d");
+        if(!context)throw new Error("image canvas is unavailable");
+        context.drawImage(bitmap,0,0);
+        bitmap.close?.();
+        const quality=Math.max(1,Math.min(100,Number(settings.imageQuality)||85))/100;
+        const blob=await new Promise(resolve=>canvas.toBlob(resolve,"image/webp",quality));
+        if(blob){
+          return {
+            blob,
+            name:"clipboard-image-"+Date.now()+".webp",
+            mediaType:"image/webp"
+          };
+        }
+      }catch{}
+    }
+    return {
+      blob:file,
+      name:file.name&&file.name.trim()?file.name:"clipboard-image-"+Date.now()+".png",
+      mediaType:file.type||"image/png"
+    };
+  }
+
+  function blobToBase64NoPad(blob) {
+    return new Promise((resolve,reject)=>{
+      const reader=new FileReader();
+      reader.onerror=()=>reject(reader.error||new Error("Could not read clipboard image"));
+      reader.onload=()=>{
+        const value=String(reader.result||"");
+        const comma=value.indexOf(",");
+        if(comma<0){reject(new Error("Clipboard image encoding failed"));return;}
+        resolve(value.slice(comma+1).replace(/=+$/,""));
+      };
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  async function addClipboardImage(file) {
+    if(!editorDraft||editorDraft.locked||!file)return false;
+    const prepared=await prepareClipboardImage(file);
+    if(!prepared)return false;
+    if(prepared.blob.size>8*1024*1024){
+      setStatus("Pasted image is over the 8 MiB inline transfer limit. Save it as a file and attach it instead.",true);
+      return false;
+    }
+    const before=clone(editorDraft.attachments||[]);
+    const existingTotal=before.reduce((sum,item)=>sum+(Number(item.size)||0),0);
+    saveState.textContent="Adding pasted image…";
+    try{
+      const data=await blobToBase64NoPad(prepared.blob);
+      const result=await request("attachment.add_bytes",{
+        id:newId(),
+        name:prepared.name,
+        mediaType:prepared.mediaType,
+        data,
+        existingTotalBytes:existingTotal,
+        existingCount:before.length
+      });
+      if(!result?.attachment)return false;
+      editorDraft.attachments=[...before,result.attachment];
+      editorDraft.updatedAt=nowIso();
+      try{
+        await saveDraft(true);
+      }catch(error){
+        editorDraft.attachments=before;
+        await request("attachment.delete",{blobKey:result.attachment.blobKey}).catch(()=>{});
+        renderAttachments();
+        throw error;
+      }
+      renderEditor();
+      setStatus("Pasted image encrypted and saved in RemoteHand Vault.");
+      return true;
+    }catch(error){
+      saveState.textContent="Save failed";
+      setStatus(String(error),true);
+      return false;
+    }
+  }
+
   async function addAttachmentPath(path) {
     if(!editorDraft||editorDraft.locked||!path)return false;
     syncDraftFromFields();
@@ -901,6 +987,18 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
   markdownEdit.addEventListener("input",markDirty);
   markdownEdit.addEventListener("blur",()=>{if(!editorDraft?.locked){syncDraftFromFields();markdownEditing=false;renderEditor();}});
   markdownView.addEventListener("click",()=>{if(editorDraft?.locked)return;markdownEditing=true;renderEditor();requestAnimationFrame(()=>markdownEdit.focus());});
+  window.addEventListener("paste",event=>{
+    if(editorBackdrop.hidden||!editorDraft||editorDraft.locked)return;
+    const files=Array.from(event.clipboardData?.files||[]).filter(file=>String(file.type||"").startsWith("image/"));
+    if(files.length===0)return;
+    event.preventDefault();
+    void (async()=>{
+      for(const file of files){
+        const added=await addClipboardImage(file);
+        if(!added)break;
+      }
+    })();
+  });
   document.querySelectorAll(".nav button[data-view]").forEach(btn=>btn.addEventListener("click",()=>{currentView=btn.dataset.view;renderBoard();}));
 
   editorBackdrop.addEventListener("mousedown",event=>{if(event.target===editorBackdrop)closeEditor();});

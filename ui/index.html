@@ -1,0 +1,652 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Notes</title>
+<style>
+*{box-sizing:border-box}
+html,body{width:100%;height:100%;margin:0}
+body{font-family:var(--remotehand-ui-font-family,Inter,ui-sans-serif,system-ui,sans-serif);font-size:var(--remotehand-ui-font-size,13px);background:var(--remotehand-background,#11151a);color:var(--remotehand-text,#dee5ef);overflow:hidden}
+[hidden]{display:none!important}
+button,input,textarea,select{font:inherit}
+button,select,input{border:1px solid var(--remotehand-border,#3d4a58);background:var(--remotehand-button-background,#232c37);color:var(--remotehand-text,#eef3f8);border-radius:7px}
+button{padding:6px 10px;cursor:pointer}
+button:hover:not(:disabled){background:var(--remotehand-button-hover,#2a3542)}
+button:disabled{opacity:.45;cursor:default}
+input,select,textarea{outline:0}
+.shell{height:100%;display:flex;flex-direction:column;min-height:0}
+.toolbar{display:flex;align-items:center;gap:7px;padding:7px 10px;border-bottom:1px solid var(--remotehand-border,#2e3743);background:var(--remotehand-surface,#171d24);flex:0 0 auto;min-height:46px}
+.toolbar .spacer{flex:1}
+.search{min-width:180px;width:min(32vw,340px);padding:6px 9px;background:var(--remotehand-input-background,#0e141a)}
+.nav{display:flex;gap:3px;padding:5px 10px;border-bottom:1px solid var(--remotehand-border,#2e3743);background:var(--remotehand-surface,#151b22)}
+.nav button{border-color:transparent;background:transparent;color:var(--remotehand-muted-text,#9aa8b8)}
+.nav button.active{background:var(--remotehand-button-background,#232c37);border-color:var(--remotehand-border,#3d4a58);color:var(--remotehand-text,#eef3f8)}
+.status{padding:5px 10px;border-bottom:1px solid var(--remotehand-border,#2e3743);color:var(--remotehand-muted-text,#9aa8b8);font-size:12px;background:var(--remotehand-surface,#151b22)}
+.board-scroll{min-height:0;flex:1;overflow:auto;padding:14px}
+.section-title{display:flex;align-items:center;gap:8px;margin:0 0 9px;font-weight:700;color:var(--remotehand-muted-text,#9aa8b8);font-size:12px;text-transform:uppercase;letter-spacing:.08em}
+.section-title:not(:first-child){margin-top:18px}
+.board{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));grid-auto-rows:8px;gap:10px;align-items:start}
+.card{position:relative;border:1px solid color-mix(in srgb,var(--note-color,#f8e08e) 52%,var(--remotehand-border,#3d4a58));border-radius:10px;background:color-mix(in srgb,var(--note-color,#f8e08e) 17%,var(--remotehand-surface,#171d24));padding:11px;box-shadow:0 2px 8px rgba(0,0,0,.12);cursor:pointer;overflow:hidden;min-height:105px}
+.card:hover{border-color:color-mix(in srgb,var(--note-color,#f8e08e) 72%,var(--remotehand-border,#3d4a58))}
+.card.dragging{opacity:.42}
+.card.drop-target{outline:2px solid var(--remotehand-accent-border,#6f9bc8)}
+.card-title{font-weight:700;font-size:14px;line-height:1.3;margin:0 26px 7px 0;overflow-wrap:anywhere}
+.card-body{line-height:1.4;color:var(--remotehand-text,#dbe4ee);display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:7;overflow:hidden;overflow-wrap:anywhere}
+.card-body p{margin:.25em 0}.card-body h1,.card-body h2,.card-body h3{font-size:1em;margin:.3em 0}.card-body pre{white-space:pre-wrap;background:rgba(0,0,0,.16);padding:5px;border-radius:5px}
+.card-tools{position:absolute;top:6px;right:6px;display:flex;gap:3px;opacity:.25}.card:hover .card-tools{opacity:1}
+.icon-btn{border:0;background:transparent;padding:3px 5px;min-width:24px}
+.labels{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}.label{font-size:11px;padding:2px 6px;border-radius:999px;background:rgba(0,0,0,.18)}
+.meta{margin-top:8px;color:var(--remotehand-muted-text,#8f9bab);font-size:11px;display:flex;gap:8px;flex-wrap:wrap}
+.check-preview{display:flex;flex-direction:column;gap:4px}.check-line{display:flex;gap:6px;align-items:flex-start}.check-line.done{text-decoration:line-through;opacity:.6}
+.empty{padding:44px 16px;text-align:center;color:var(--remotehand-muted-text,#9aa8b8)}
+.locked-vault{height:100%;display:flex;align-items:center;justify-content:center;padding:24px}.locked-panel{text-align:center;max-width:420px}.locked-panel h2{margin:0 0 8px}.locked-panel p{color:var(--remotehand-muted-text,#9aa8b8);line-height:1.5}
+.modal-backdrop{position:fixed;inset:0;z-index:20;background:rgba(0,0,0,.58);display:flex;align-items:center;justify-content:center;padding:24px}
+.modal{width:min(780px,96vw);max-height:90vh;display:flex;flex-direction:column;border:1px solid var(--remotehand-border,#3d4a58);border-radius:12px;background:var(--remotehand-surface,#171d24);box-shadow:0 18px 70px rgba(0,0,0,.46);overflow:hidden}
+.modal.small{width:min(560px,96vw)}
+.modal-header{display:flex;align-items:center;gap:7px;padding:10px;border-bottom:1px solid var(--remotehand-border,#2e3743)}
+.modal-header input.title{flex:1;min-width:0;font-weight:700;font-size:17px;padding:7px 9px;background:var(--remotehand-input-background,#0e141a)}
+.modal-header .readonly-title{flex:1;font-weight:700;font-size:17px;padding:7px 2px}
+.modal-body{padding:12px;overflow:auto;min-height:140px}
+.modal-footer{display:flex;align-items:center;gap:7px;padding:9px 10px;border-top:1px solid var(--remotehand-border,#2e3743)}
+.modal-footer .spacer{flex:1}
+.md-view,.md-edit{min-height:180px;width:100%;border:1px solid transparent;border-radius:8px;padding:9px;line-height:1.55}
+.md-view{cursor:text;background:var(--remotehand-background,#11151a)}
+.md-edit{resize:vertical;background:var(--remotehand-input-background,#0e141a);color:var(--remotehand-text,#eef3f8);border-color:var(--remotehand-border,#3d4a58)}
+.md-view h1{font-size:1.55em}.md-view h2{font-size:1.3em}.md-view h3{font-size:1.12em}.md-view pre{white-space:pre-wrap;background:rgba(0,0,0,.2);padding:8px;border-radius:7px}.md-view code{font-family:var(--remotehand-terminal-font-family,Consolas,monospace)}
+.form-row{display:grid;grid-template-columns:145px minmax(0,1fr);gap:9px;align-items:center;margin-bottom:10px}
+.form-row input,.form-row select{width:100%;padding:6px 8px;background:var(--remotehand-input-background,#0e141a)}
+.checklist{display:flex;flex-direction:column;gap:6px}.check-item{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:7px;align-items:center}.check-item input[type=text]{padding:7px 8px;background:var(--remotehand-input-background,#0e141a);width:100%}.check-item.done input[type=text]{text-decoration:line-through;opacity:.65}
+.attachment-area{margin-top:14px;padding-top:12px;border-top:1px solid var(--remotehand-border,#2e3743)}.attachment-area h3{margin:0 0 6px;font-size:13px}.attachment-note{font-size:12px;color:var(--remotehand-muted-text,#9aa8b8);line-height:1.45}
+.color-row{display:flex;gap:5px;flex-wrap:wrap}.swatch{width:24px;height:24px;border-radius:50%;padding:0;border:2px solid transparent;background:var(--swatch)}.swatch.active{border-color:var(--remotehand-text,#fff)}
+.notice{padding:7px 9px;margin-bottom:8px;border:1px solid var(--remotehand-border,#3d4a58);border-radius:7px;color:var(--remotehand-muted-text,#a7b2bf)}
+.danger{border-color:var(--remotehand-danger-border,#754448);color:var(--remotehand-danger-text,#efaaaa)}
+.primary{border-color:var(--remotehand-accent-border,#5d7fa4);background:var(--remotehand-accent-surface,#19304a)}
+hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
+@media(max-width:620px){.toolbar{flex-wrap:wrap}.search{order:10;width:100%}.board{grid-template-columns:1fr}.form-row{grid-template-columns:1fr}.modal-backdrop{padding:8px}}
+</style>
+</head>
+<body>
+<div class="shell">
+  <div class="toolbar">
+    <button id="newNoteBtn" class="primary" title="New note (Ctrl+N)">+ Note</button>
+    <button id="newChecklistBtn" title="New checklist (Ctrl+Shift+N)">+ Checklist</button>
+    <input id="searchInput" class="search" type="search" placeholder="Search notes, checklists, labels..." aria-label="Search Notes">
+    <span class="spacer"></span>
+    <select id="sortSelect" title="Sort">
+      <option value="manual">Manual</option>
+      <option value="updated">Updated</option>
+      <option value="created">Created</option>
+      <option value="title">Title</option>
+    </select>
+    <button id="settingsBtn" title="Notes Settings">⚙</button>
+  </div>
+  <div class="nav">
+    <button data-view="main" class="active">Notes</button>
+    <button data-view="archive">Archive</button>
+    <button data-view="trash">Trash</button>
+    <span class="spacer"></span>
+    <button id="emptyTrashBtn" class="danger" hidden>Empty Trash</button>
+  </div>
+  <div id="status" class="status">Starting Notes…</div>
+  <div id="content" class="board-scroll">
+    <div id="lockedVault" class="locked-vault" hidden>
+      <div class="locked-panel">
+        <h2>Notes are locked</h2>
+        <p>Your note titles, content, labels, and private metadata stay hidden until RemoteHand Vault is unlocked.</p>
+        <button id="unlockVaultBtn" class="primary">Unlock Vault</button>
+      </div>
+    </div>
+    <div id="boardHost">
+      <div id="pinnedTitle" class="section-title" hidden>Pinned</div>
+      <div id="pinnedBoard" class="board" hidden></div>
+      <div id="notesTitle" class="section-title" hidden>Notes</div>
+      <div id="board" class="board"></div>
+      <div id="emptyState" class="empty" hidden></div>
+    </div>
+  </div>
+</div>
+
+<div id="editorBackdrop" class="modal-backdrop" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="editorHeading">
+    <div class="modal-header">
+      <input id="noteTitle" class="title" aria-label="Note title">
+      <div id="readonlyTitle" class="readonly-title" hidden></div>
+      <button id="pinBtn" title="Pin/unpin (Ctrl+P)">📌</button>
+      <button id="lockBtn" title="Lock/unlock (Ctrl+L)">🔓</button>
+      <button id="closeEditorBtn" title="Close (Esc)">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="editorNotice" class="notice" hidden></div>
+      <div id="markdownArea">
+        <div id="markdownView" class="md-view" title="Click to edit"></div>
+        <textarea id="markdownEdit" class="md-edit" hidden spellcheck="true"></textarea>
+      </div>
+      <div id="checklistArea" hidden>
+        <div id="checklist" class="checklist"></div>
+        <button id="addChecklistItemBtn">+ Item</button>
+        <label style="margin-left:10px"><input id="hideCompletedToggle" type="checkbox"> Hide completed</label>
+      </div>
+      <hr>
+      <div class="form-row">
+        <label for="labelsInput">Labels / tags</label>
+        <input id="labelsInput" type="text" placeholder="work, idea, later">
+      </div>
+      <div class="form-row">
+        <span>Color</span>
+        <div id="colorRow" class="color-row"></div>
+      </div>
+      <div class="attachment-area">
+        <h3>Attachments</h3>
+        <div class="attachment-note">File and image attachment persistence is waiting for RemoteHand's generic Vault encrypted-blob API. No attachment bytes are stored in plaintext.</div>
+        <button disabled style="margin-top:7px">+ Add attachment</button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <span id="saveState">Saved</span>
+      <span class="spacer"></span>
+      <button id="restoreBtn" hidden>Restore to Notes</button>
+      <button id="archiveBtn">Archive</button>
+      <button id="trashBtn" class="danger">Move to Trash</button>
+      <button id="deleteForeverBtn" class="danger" hidden>Delete forever</button>
+    </div>
+  </div>
+</div>
+
+<div id="settingsBackdrop" class="modal-backdrop" hidden>
+  <div class="modal small" role="dialog" aria-modal="true">
+    <div class="modal-header">
+      <strong style="flex:1">Notes Settings</strong>
+      <button id="closeSettingsBtn">✕</button>
+    </div>
+    <div class="modal-body">
+      <h3>Attachments</h3>
+      <div class="form-row"><label>Max file size (MiB)</label><input id="setMaxFile" type="number" min="0" step="1"></div>
+      <div class="form-row"><label>Max image size (MiB)</label><input id="setMaxImage" type="number" min="0" step="1"></div>
+      <div class="form-row"><label>Total per note (MiB)</label><input id="setMaxTotal" type="number" min="0" step="1"></div>
+      <div class="form-row"><label>Max attachments</label><input id="setMaxAttachments" type="number" min="0" step="1"></div>
+      <div class="form-row"><label>Compress images</label><input id="setCompress" type="checkbox"></div>
+      <div class="form-row"><label>Image quality (%)</label><input id="setQuality" type="number" min="1" max="100" step="1"></div>
+      <h3>Editing & board</h3>
+      <div class="form-row"><label>Autosave delay (ms)</label><input id="setAutosave" type="number" min="100" step="50"></div>
+      <div class="form-row"><label>Default sort</label><select id="setDefaultSort"><option value="manual">Manual</option><option value="updated">Updated</option><option value="created">Created</option><option value="title">Title</option></select></div>
+      <div class="form-row"><label>Card density</label><select id="setDensity"><option value="comfortable">Comfortable</option><option value="compact">Compact</option></select></div>
+      <div class="form-row"><label>Hide completed by default</label><input id="setHideCompleted" type="checkbox"></div>
+      <h3>Behavior</h3>
+      <div class="form-row"><label>Confirm permanent delete</label><input id="setConfirmDelete" type="checkbox"></div>
+      <div class="form-row"><label>Confirm Empty Trash</label><input id="setConfirmEmpty" type="checkbox"></div>
+    </div>
+    <div class="modal-footer"><span class="spacer"></span><button id="saveSettingsBtn" class="primary">Save Settings</button></div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const request = (method, params = null) => window.remotehand.request(method, params);
+  const COLORS = {
+    yellow:"#f2cf66", blue:"#6eb5ff", green:"#7fd88a", pink:"#f18fb4",
+    purple:"#b79af2", orange:"#f1a45f", gray:"#9aa8b8", red:"#ef7b7b"
+  };
+  const $ = id => document.getElementById(id);
+  const status = $("status");
+  const board = $("board");
+  const pinnedBoard = $("pinnedBoard");
+  const emptyState = $("emptyState");
+  const boardHost = $("boardHost");
+  const lockedVault = $("lockedVault");
+  const searchInput = $("searchInput");
+  const sortSelect = $("sortSelect");
+  const editorBackdrop = $("editorBackdrop");
+  const noteTitle = $("noteTitle");
+  const readonlyTitle = $("readonlyTitle");
+  const markdownView = $("markdownView");
+  const markdownEdit = $("markdownEdit");
+  const markdownArea = $("markdownArea");
+  const checklistArea = $("checklistArea");
+  const checklistHost = $("checklist");
+  const labelsInput = $("labelsInput");
+  const colorRow = $("colorRow");
+  const saveState = $("saveState");
+  const editorNotice = $("editorNotice");
+
+  let notes = [];
+  let catalog = {version:1,noteIds:[],manualOrder:{main:[],archive:[],trash:[]},pinnedOrder:[]};
+  let settings = {
+    autosaveDelayMs:650,maxFileMiB:10,maxImageMiB:8,maxTotalAttachmentMiB:50,maxAttachments:10,
+    imageCompression:true,imageQuality:85,defaultSort:"updated",cardDensity:"comfortable",
+    hideCompletedByDefault:false,confirmPermanentDelete:true,confirmEmptyTrash:true
+  };
+  let currentView = "main";
+  let activeId = null;
+  let editorDraft = null;
+  let autosaveTimer = null;
+  let saveChain = Promise.resolve();
+  let draggedCardId = null;
+  let markdownEditing = false;
+
+  const nowIso = () => new Date().toISOString();
+  const newId = () => crypto.randomUUID();
+  const activeNote = () => notes.find(note => note.id === activeId) || null;
+  const esc = value => String(value ?? "").replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
+
+  function markdown(text) {
+    let source = esc(text || "");
+    const blocks = [];
+    source = source.replace(/```([\s\S]*?)```/g, (_, code) => {
+      const key = "@@CODE" + blocks.length + "@@";
+      blocks.push("<pre><code>" + code.trim() + "</code></pre>");
+      return key;
+    });
+    source = source
+      .replace(/^### (.+)$/gm,"<h3>$1</h3>")
+      .replace(/^## (.+)$/gm,"<h2>$1</h2>")
+      .replace(/^# (.+)$/gm,"<h1>$1</h1>")
+      .replace(/^&gt; (.+)$/gm,"<blockquote>$1</blockquote>")
+      .replace(/\*\*(.+?)\*\*/g,"<strong>$1</strong>")
+      .replace(/~~(.+?)~~/g,"<del>$1</del>")
+      .replace(/\*(.+?)\*/g,"<em>$1</em>")
+      .replace(/`([^`]+)`/g,"<code>$1</code>")
+      .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,'<a href="$2" target="_blank" rel="noreferrer">$1</a>');
+    const lines = source.split("\n");
+    let inUl = false, inOl = false, html = "";
+    for (const line of lines) {
+      if (/^- /.test(line)) {
+        if (!inUl) { html += "<ul>"; inUl = true; }
+        html += "<li>" + line.slice(2) + "</li>";
+        continue;
+      }
+      if (/^\d+\. /.test(line)) {
+        if (!inOl) { html += "<ol>"; inOl = true; }
+        html += "<li>" + line.replace(/^\d+\. /,"") + "</li>";
+        continue;
+      }
+      if (inUl) { html += "</ul>"; inUl = false; }
+      if (inOl) { html += "</ol>"; inOl = false; }
+      if (/^@@CODE\d+@@$/.test(line)) html += line;
+      else if (/^<(h[1-3]|blockquote)/.test(line)) html += line;
+      else if (line.trim()) html += "<p>" + line + "</p>";
+    }
+    if (inUl) html += "</ul>";
+    if (inOl) html += "</ol>";
+    blocks.forEach((block,index) => { html = html.replace("@@CODE"+index+"@@",block); });
+    return html || '<span style="opacity:.5">Click to write…</span>';
+  }
+
+  function setStatus(message, error=false) {
+    status.textContent = message;
+    status.style.color = error ? "var(--remotehand-danger-text,#efaaaa)" : "";
+  }
+
+  function ensureCatalog() {
+    catalog.noteIds = Array.isArray(catalog.noteIds) ? catalog.noteIds : [];
+    catalog.manualOrder = catalog.manualOrder && typeof catalog.manualOrder === "object" ? catalog.manualOrder : {};
+    for (const view of ["main","archive","trash"]) if (!Array.isArray(catalog.manualOrder[view])) catalog.manualOrder[view] = [];
+    if (!Array.isArray(catalog.pinnedOrder)) catalog.pinnedOrder = [];
+  }
+
+  function cardColor(note){ return COLORS[note.color] || COLORS.yellow; }
+  function noteText(note){ return [note.title,note.body,...(note.labels||[]),...(note.checklist||[]).map(item=>item.text)].join(" ").toLowerCase(); }
+
+  function orderedNotes(view) {
+    const query = searchInput.value.trim().toLowerCase();
+    let list = notes.filter(note => note.location === view && (!query || noteText(note).includes(query)));
+    const sort = sortSelect.value;
+    if (sort === "manual") {
+      const order = catalog.manualOrder[view] || [];
+      list.sort((a,b) => {
+        const ai = order.indexOf(a.id), bi = order.indexOf(b.id);
+        if (ai < 0 && bi < 0) return String(b.updatedAt).localeCompare(String(a.updatedAt));
+        if (ai < 0) return 1;
+        if (bi < 0) return -1;
+        return ai-bi;
+      });
+    } else if (sort === "title") {
+      list.sort((a,b)=>String(a.title||"").localeCompare(String(b.title||"")));
+    } else if (sort === "created") {
+      list.sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));
+    } else {
+      list.sort((a,b)=>String(b.updatedAt).localeCompare(String(a.updatedAt)));
+    }
+    return list;
+  }
+
+  function renderChecklistPreview(note) {
+    const items=(note.checklist||[]).slice(0,5);
+    const lines=items.map(item => '<div class="check-line '+(item.done?"done":"")+'"><span>'+(item.done?"☑":"☐")+'</span><span>'+esc(item.text)+'</span></div>').join("");
+    const more=(note.checklist||[]).length-items.length;
+    return '<div class="check-preview">'+lines+(more?'<div class="meta">+'+more+' more</div>':"")+'</div>';
+  }
+
+  function createCard(note) {
+    const el=document.createElement("article");
+    el.className="card";
+    el.draggable=sortSelect.value==="manual";
+    el.dataset.id=note.id;
+    el.style.setProperty("--note-color",cardColor(note));
+    const labels=(note.labels||[]).map(label=>'<span class="label">'+esc(label)+'</span>').join("");
+    const content=note.type==="checklist" ? renderChecklistPreview(note) : '<div class="card-body">'+markdown(note.body||"")+'</div>';
+    el.innerHTML =
+      '<div class="card-tools"><span title="'+(note.locked?"Locked":"Unlocked")+'">'+(note.locked?"🔒":"")+'</span>'+(note.pinned?'<span title="Pinned">📌</span>':"")+'</div>'+
+      '<div class="card-title">'+esc(note.title||"Untitled")+'</div>'+content+
+      (labels?'<div class="labels">'+labels+'</div>':"")+
+      '<div class="meta"><span>'+new Date(note.updatedAt||note.createdAt).toLocaleString()+'</span>'+
+      ((note.attachments||[]).length?'<span>📎 '+note.attachments.length+'</span>':"")+'</div>';
+    el.addEventListener("click",()=>openEditor(note.id));
+    el.addEventListener("dragstart",event=>{draggedCardId=note.id;el.classList.add("dragging");event.dataTransfer.effectAllowed="move";});
+    el.addEventListener("dragend",()=>{draggedCardId=null;el.classList.remove("dragging");document.querySelectorAll(".drop-target").forEach(x=>x.classList.remove("drop-target"));});
+    el.addEventListener("dragover",event=>{if(sortSelect.value!=="manual"||!draggedCardId||draggedCardId===note.id)return;event.preventDefault();el.classList.add("drop-target");});
+    el.addEventListener("dragleave",()=>el.classList.remove("drop-target"));
+    el.addEventListener("drop",event=>{
+      event.preventDefault();event.stopPropagation();el.classList.remove("drop-target");
+      if (!draggedCardId || draggedCardId===note.id) return;
+      reorderCards(draggedCardId,note.id,note.pinned);
+    });
+    return el;
+  }
+
+  function resizeMasonry() {
+    document.querySelectorAll(".card").forEach(card=>{
+      card.style.gridRowEnd="auto";
+      const boardEl=card.parentElement;
+      const row=parseInt(getComputedStyle(boardEl).gridAutoRows)||8;
+      const gap=parseInt(getComputedStyle(boardEl).rowGap)||10;
+      const span=Math.ceil((card.getBoundingClientRect().height+gap)/(row+gap));
+      card.style.gridRowEnd="span "+Math.max(1,span);
+    });
+  }
+
+  function renderBoard() {
+    ensureCatalog();
+    const list=orderedNotes(currentView);
+    const pinned=currentView==="main" ? list.filter(note=>note.pinned) : [];
+    const normal=currentView==="main" ? list.filter(note=>!note.pinned) : list;
+    pinnedBoard.replaceChildren(...pinned.map(createCard));
+    board.replaceChildren(...normal.map(createCard));
+    $("pinnedTitle").hidden=pinned.length===0;
+    pinnedBoard.hidden=pinned.length===0;
+    $("notesTitle").hidden=currentView!=="main" || pinned.length===0;
+    emptyState.hidden=list.length!==0;
+    if (!list.length) emptyState.textContent=currentView==="trash"?"Trash is empty.":currentView==="archive"?"No archived notes.":"No notes yet. Create one to get started.";
+    $("emptyTrashBtn").hidden=currentView!=="trash" || list.length===0;
+    document.querySelectorAll(".nav button[data-view]").forEach(btn=>btn.classList.toggle("active",btn.dataset.view===currentView));
+    requestAnimationFrame(resizeMasonry);
+  }
+
+  async function persistCatalog() {
+    ensureCatalog();
+    await request("notes.catalog.set",{catalog});
+  }
+
+  async function reorderCards(sourceId,targetId,pinnedGroup) {
+    if (sortSelect.value!=="manual") return;
+    const view=currentView;
+    let order = pinnedGroup && view==="main" ? catalog.pinnedOrder : catalog.manualOrder[view];
+    const eligible=orderedNotes(view).filter(note=>view!=="main" || !!note.pinned===!!pinnedGroup).map(note=>note.id);
+    order=order.filter(id=>eligible.includes(id));
+    for(const id of eligible) if(!order.includes(id)) order.push(id);
+    const from=order.indexOf(sourceId), to=order.indexOf(targetId);
+    if(from<0||to<0)return;
+    order.splice(to,0,order.splice(from,1)[0]);
+    if(pinnedGroup&&view==="main") catalog.pinnedOrder=order; else catalog.manualOrder[view]=order;
+    renderBoard();
+    try{await persistCatalog();setStatus("Manual card order saved.");}catch(error){setStatus(String(error),true);}
+  }
+
+  function makeNote(type) {
+    const stamp=nowIso();
+    return {
+      version:1,id:newId(),type,title:"",body:"",checklist:[],labels:[],color:"yellow",pinned:false,locked:false,
+      location:"main",createdAt:stamp,updatedAt:stamp,attachments:[]
+    };
+  }
+
+  function clone(value){ return JSON.parse(JSON.stringify(value)); }
+
+  function openEditor(id) {
+    const note=notes.find(item=>item.id===id); if(!note)return;
+    activeId=id;editorDraft=clone(note);markdownEditing=false;
+    editorBackdrop.hidden=false;renderEditor();
+  }
+
+  async function createNote(type) {
+    const note=makeNote(type);notes.push(note);catalog.noteIds.push(note.id);catalog.manualOrder.main.unshift(note.id);
+    renderBoard();openEditor(note.id);
+    try{await saveDraft(true);}catch(error){setStatus(String(error),true);}
+  }
+
+  function syncDraftFromFields() {
+    if(!editorDraft||editorDraft.locked)return;
+    editorDraft.title=noteTitle.value;
+    editorDraft.labels=labelsInput.value.split(",").map(x=>x.trim()).filter(Boolean).slice(0,64);
+    if(editorDraft.type==="note") editorDraft.body=markdownEdit.value;
+  }
+
+  function markDirty() {
+    if(!editorDraft||editorDraft.locked)return;
+    syncDraftFromFields();
+    editorDraft.updatedAt=nowIso();
+    saveState.textContent="Saving…";
+    clearTimeout(autosaveTimer);
+    autosaveTimer=setTimeout(()=>{void saveDraft(false);},Math.max(100,Number(settings.autosaveDelayMs)||650));
+  }
+
+  async function saveDraft(force=false) {
+    if(!editorDraft)return;
+    if(!force&&editorDraft.locked)return;
+    syncDraftFromFields();
+    const payload=clone(editorDraft);
+    saveChain=saveChain.then(()=>request("notes.save",{note:payload}));
+    try{
+      await saveChain;
+      const index=notes.findIndex(note=>note.id===payload.id);
+      if(index>=0) notes[index]=clone(payload); else notes.push(clone(payload));
+      saveState.textContent="Saved";
+      renderBoard();
+      setStatus("Notes saved privately in RemoteHand Vault.");
+    }catch(error){
+      saveState.textContent="Save failed";
+      setStatus(String(error),true);
+      throw error;
+    }
+  }
+
+  function setReadonlyControls(locked) {
+    noteTitle.hidden=locked;readonlyTitle.hidden=!locked;
+    labelsInput.disabled=locked;$("pinBtn").disabled=locked;$("archiveBtn").disabled=locked;
+    $("trashBtn").disabled=locked;
+    document.querySelectorAll(".swatch").forEach(btn=>btn.disabled=locked);
+    $("addChecklistItemBtn").disabled=locked;
+  }
+
+  function renderEditor() {
+    const note=editorDraft;if(!note)return;
+    noteTitle.value=note.title||"";readonlyTitle.textContent=note.title||"Untitled";
+    labelsInput.value=(note.labels||[]).join(", ");
+    $("pinBtn").textContent=note.pinned?"📍":"📌";
+    $("lockBtn").textContent=note.locked?"🔒":"🔓";
+    $("lockBtn").title=note.locked?"Unlock note (Ctrl+L)":"Lock note (Ctrl+L)";
+    setReadonlyControls(note.locked);
+    editorNotice.hidden=!note.locked;
+    editorNotice.textContent=note.locked?"This note is locked against editing, archiving, and deletion. You can still view it, rearrange its card, or restore it to Notes.":"";
+    markdownArea.hidden=note.type!=="note";checklistArea.hidden=note.type!=="checklist";
+    if(note.type==="note"){
+      markdownEdit.value=note.body||"";markdownEdit.readOnly=note.locked;
+      markdownView.innerHTML=markdown(note.body||"");
+      markdownView.hidden=markdownEditing;markdownEdit.hidden=!markdownEditing;
+    }else renderChecklistEditor();
+    colorRow.replaceChildren(...Object.entries(COLORS).map(([name,color])=>{
+      const btn=document.createElement("button");btn.className="swatch"+(note.color===name?" active":"");btn.style.setProperty("--swatch",color);btn.title=name;btn.disabled=note.locked;
+      btn.addEventListener("click",()=>{if(note.locked)return;note.color=name;markDirty();renderEditor();});return btn;
+    }));
+    $("archiveBtn").hidden=note.location!=="main";$("trashBtn").hidden=note.location!=="main";
+    $("restoreBtn").hidden=note.location==="main";
+    $("deleteForeverBtn").hidden=note.location!=="trash";
+    $("deleteForeverBtn").disabled=note.locked;
+    $("restoreBtn").disabled=false;
+    saveState.textContent="Saved";
+  }
+
+  function renderChecklistEditor() {
+    const note=editorDraft;checklistHost.replaceChildren();
+    const hide=$("hideCompletedToggle").checked;
+    const items=[...(note.checklist||[])].sort((a,b)=>Number(a.done)-Number(b.done));
+    for(const item of items){
+      if(hide&&item.done)continue;
+      const row=document.createElement("div");row.className="check-item"+(item.done?" done":"");row.draggable=!note.locked;
+      row.dataset.id=item.id;
+      const box=document.createElement("input");box.type="checkbox";box.checked=!!item.done;box.disabled=note.locked;
+      const input=document.createElement("input");input.type="text";input.value=item.text||"";input.disabled=note.locked;
+      const remove=document.createElement("button");remove.textContent="✕";remove.className="icon-btn";remove.disabled=note.locked;
+      box.addEventListener("change",()=>{item.done=box.checked;markDirty();renderChecklistEditor();});
+      input.addEventListener("input",()=>{item.text=input.value;markDirty();});
+      input.addEventListener("keydown",event=>{if(event.key==="Enter"){event.preventDefault();if(!input.value.trim()){removeChecklistItem(item.id);}else addChecklistItem(item.id);}});
+      remove.addEventListener("click",()=>removeChecklistItem(item.id));
+      row.addEventListener("dragstart",()=>{draggedCardId="check:"+item.id;row.classList.add("dragging");});
+      row.addEventListener("dragend",()=>{draggedCardId=null;row.classList.remove("dragging");});
+      row.addEventListener("dragover",event=>{if(draggedCardId?.startsWith("check:"))event.preventDefault();});
+      row.addEventListener("drop",event=>{event.preventDefault();const source=draggedCardId?.slice(6);if(source&&source!==item.id)reorderChecklist(source,item.id);});
+      row.append(box,input,remove);checklistHost.append(row);
+    }
+  }
+
+  function addChecklistItem(afterId=null) {
+    if(!editorDraft||editorDraft.locked)return;
+    const item={id:newId(),text:"",done:false};
+    const list=editorDraft.checklist||(editorDraft.checklist=[]);
+    const index=afterId?list.findIndex(x=>x.id===afterId):-1;
+    if(index>=0)list.splice(index+1,0,item);else list.push(item);
+    markDirty();renderChecklistEditor();
+    requestAnimationFrame(()=>checklistHost.querySelector('[data-id="'+item.id+'"] input[type=text]')?.focus());
+  }
+  function removeChecklistItem(id){if(editorDraft?.locked)return;editorDraft.checklist=editorDraft.checklist.filter(x=>x.id!==id);markDirty();renderChecklistEditor();}
+  function reorderChecklist(source,target){if(editorDraft?.locked)return;const list=editorDraft.checklist;const from=list.findIndex(x=>x.id===source),to=list.findIndex(x=>x.id===target);if(from<0||to<0)return;list.splice(to,0,list.splice(from,1)[0]);markDirty();renderChecklistEditor();}
+
+  async function toggleLock() {
+    if(!editorDraft)return;
+    syncDraftFromFields();
+    if(!editorDraft.locked) await saveDraft(true);
+    editorDraft.locked=!editorDraft.locked;
+    try{await request("notes.save",{note:clone(editorDraft)});const i=notes.findIndex(n=>n.id===editorDraft.id);notes[i]=clone(editorDraft);renderEditor();renderBoard();setStatus(editorDraft.locked?"Note locked against changes.":"Note unlocked.");}
+    catch(error){editorDraft.locked=!editorDraft.locked;renderEditor();setStatus(String(error),true);}
+  }
+
+  async function changeLocation(next) {
+    if(!editorDraft)return;
+    if(editorDraft.locked && next!=="main"){setStatus("Locked notes cannot be archived or moved to Trash.",true);return;}
+    editorDraft.location=next;editorDraft.updatedAt=nowIso();
+    try{await request("notes.save",{note:clone(editorDraft)});const i=notes.findIndex(n=>n.id===editorDraft.id);notes[i]=clone(editorDraft);closeEditor();renderBoard();setStatus(next==="main"?"Note restored.":next==="archive"?"Note archived.":"Note moved to Trash.");}
+    catch(error){setStatus(String(error),true);}
+  }
+
+  async function deleteForever() {
+    const note=editorDraft;if(!note||note.locked)return;
+    if(settings.confirmPermanentDelete&&!confirm("Permanently delete this note? This cannot be undone."))return;
+    try{await request("notes.delete",{id:note.id});notes=notes.filter(n=>n.id!==note.id);closeEditor();renderBoard();setStatus("Note permanently deleted.");}
+    catch(error){setStatus(String(error),true);}
+  }
+
+  async function emptyTrash() {
+    if(settings.confirmEmptyTrash&&!confirm("Permanently delete all unlocked notes in Trash? Locked notes will be kept."))return;
+    try{
+      const result=await request("notes.empty_trash");
+      await loadNotes(false);
+      setStatus(result.deleted+" deleted, "+result.keptLocked+" locked notes kept.");
+    }catch(error){setStatus(String(error),true);}
+  }
+
+  function closeEditor(){clearTimeout(autosaveTimer);if(editorDraft&&!editorDraft.locked)void saveDraft(false).catch(()=>{});editorBackdrop.hidden=true;activeId=null;editorDraft=null;markdownEditing=false;}
+
+  async function loadNotes(showAccessError=true) {
+    setStatus("Opening private Notes…");
+    try{
+      const data=await request("notes.load");
+      notes=Array.isArray(data.notes)?data.notes:[];
+      catalog=data.catalog||catalog;ensureCatalog();
+      settings={...settings,...(data.settings||{})};
+      sortSelect.value=settings.defaultSort||"updated";
+      lockedVault.hidden=true;boardHost.hidden=false;
+      renderBoard();
+      setStatus(data.warnings?.length?"Notes opened with "+data.warnings.length+" warning(s).":"Private Notes ready.");
+    }catch(error){
+      const message=String(error||"");
+      if(/cancel|locked|timeout/i.test(message)){boardHost.hidden=true;lockedVault.hidden=false;setStatus("RemoteHand Vault is locked.");}
+      else {setStatus(message,true);if(showAccessError) console.error(error);}
+    }
+  }
+
+  function openSettings() {
+    $("setMaxFile").value=settings.maxFileMiB;$("setMaxImage").value=settings.maxImageMiB;$("setMaxTotal").value=settings.maxTotalAttachmentMiB;
+    $("setMaxAttachments").value=settings.maxAttachments;$("setCompress").checked=!!settings.imageCompression;$("setQuality").value=settings.imageQuality;
+    $("setAutosave").value=settings.autosaveDelayMs;$("setDefaultSort").value=settings.defaultSort;$("setDensity").value=settings.cardDensity;
+    $("setHideCompleted").checked=!!settings.hideCompletedByDefault;$("setConfirmDelete").checked=!!settings.confirmPermanentDelete;$("setConfirmEmpty").checked=!!settings.confirmEmptyTrash;
+    $("settingsBackdrop").hidden=false;
+  }
+
+  async function saveSettings() {
+    settings={
+      ...settings,
+      maxFileMiB:Number($("setMaxFile").value)||0,maxImageMiB:Number($("setMaxImage").value)||0,maxTotalAttachmentMiB:Number($("setMaxTotal").value)||0,
+      maxAttachments:Number($("setMaxAttachments").value)||0,imageCompression:$("setCompress").checked,imageQuality:Number($("setQuality").value)||85,
+      autosaveDelayMs:Math.max(100,Number($("setAutosave").value)||650),defaultSort:$("setDefaultSort").value,cardDensity:$("setDensity").value,
+      hideCompletedByDefault:$("setHideCompleted").checked,confirmPermanentDelete:$("setConfirmDelete").checked,confirmEmptyTrash:$("setConfirmEmpty").checked
+    };
+    try{const result=await request("settings.set",{settings});settings=result.settings||settings;sortSelect.value=settings.defaultSort;$("settingsBackdrop").hidden=true;renderBoard();setStatus("Notes settings saved.");}
+    catch(error){setStatus(String(error),true);}
+  }
+
+  $("newNoteBtn").addEventListener("click",()=>createNote("note"));
+  $("newChecklistBtn").addEventListener("click",()=>createNote("checklist"));
+  searchInput.addEventListener("input",renderBoard);
+  sortSelect.addEventListener("change",renderBoard);
+  $("settingsBtn").addEventListener("click",openSettings);
+  $("closeSettingsBtn").addEventListener("click",()=>{$("settingsBackdrop").hidden=true;});
+  $("saveSettingsBtn").addEventListener("click",saveSettings);
+  $("closeEditorBtn").addEventListener("click",closeEditor);
+  $("lockBtn").addEventListener("click",toggleLock);
+  $("pinBtn").addEventListener("click",()=>{if(!editorDraft||editorDraft.locked)return;editorDraft.pinned=!editorDraft.pinned;markDirty();renderEditor();});
+  $("archiveBtn").addEventListener("click",()=>changeLocation("archive"));
+  $("trashBtn").addEventListener("click",()=>changeLocation("trash"));
+  $("restoreBtn").addEventListener("click",()=>changeLocation("main"));
+  $("deleteForeverBtn").addEventListener("click",deleteForever);
+  $("emptyTrashBtn").addEventListener("click",emptyTrash);
+  $("unlockVaultBtn").addEventListener("click",()=>loadNotes(true));
+  $("addChecklistItemBtn").addEventListener("click",()=>addChecklistItem());
+  $("hideCompletedToggle").addEventListener("change",renderChecklistEditor);
+  noteTitle.addEventListener("input",markDirty);
+  labelsInput.addEventListener("input",markDirty);
+  markdownEdit.addEventListener("input",markDirty);
+  markdownEdit.addEventListener("blur",()=>{if(!editorDraft?.locked){syncDraftFromFields();markdownEditing=false;renderEditor();}});
+  markdownView.addEventListener("click",()=>{if(editorDraft?.locked)return;markdownEditing=true;renderEditor();requestAnimationFrame(()=>markdownEdit.focus());});
+  document.querySelectorAll(".nav button[data-view]").forEach(btn=>btn.addEventListener("click",()=>{currentView=btn.dataset.view;renderBoard();}));
+
+  editorBackdrop.addEventListener("mousedown",event=>{if(event.target===editorBackdrop)closeEditor();});
+  $("settingsBackdrop").addEventListener("mousedown",event=>{if(event.target===$("settingsBackdrop"))$("settingsBackdrop").hidden=true;});
+  window.addEventListener("resize",()=>requestAnimationFrame(resizeMasonry));
+
+  window.addEventListener("keydown",event=>{
+    const key=event.key.toLowerCase();
+    if(event.key==="Escape"){
+      if(!$("settingsBackdrop").hidden){$("settingsBackdrop").hidden=true;event.preventDefault();return;}
+      if(!editorBackdrop.hidden){closeEditor();event.preventDefault();return;}
+    }
+    if(event.ctrlKey&&!event.shiftKey&&key==="n"){event.preventDefault();void createNote("note");}
+    else if(event.ctrlKey&&event.shiftKey&&key==="n"){event.preventDefault();void createNote("checklist");}
+    else if(event.ctrlKey&&!event.shiftKey&&key==="f"){event.preventDefault();searchInput.focus();searchInput.select();}
+    else if(!editorBackdrop.hidden&&event.ctrlKey&&!event.shiftKey&&key==="l"){event.preventDefault();void toggleLock();}
+    else if(!editorBackdrop.hidden&&event.ctrlKey&&!event.shiftKey&&key==="p"){event.preventDefault();if(editorDraft&&!editorDraft.locked){editorDraft.pinned=!editorDraft.pinned;markDirty();renderEditor();}}
+    else if(!editorBackdrop.hidden&&event.ctrlKey&&event.shiftKey&&key==="a"){event.preventDefault();if(editorDraft&&!editorDraft.locked&&editorDraft.location==="main")void changeLocation("archive");}
+    else if(!editorBackdrop.hidden&&event.key==="Delete"&&!event.ctrlKey&&!event.altKey&&!event.metaKey){
+      const target=event.target;if(target instanceof HTMLInputElement||target instanceof HTMLTextAreaElement)return;
+      event.preventDefault();if(editorDraft&&!editorDraft.locked&&editorDraft.location==="main")void changeLocation("trash");
+    }
+  });
+
+  if(window.remotehand&&typeof window.remotehand.onEvent==="function"){
+    window.remotehand.onEvent("vault.status",payload=>{if(payload&&payload.locked){notes=[];boardHost.hidden=true;lockedVault.hidden=false;closeEditor();setStatus("RemoteHand Vault is locked.");}});
+  }
+
+  void loadNotes(false);
+})();
+</script>
+</body>
+</html>

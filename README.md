@@ -4,9 +4,9 @@ Private, Vault-backed sticky-note and checklist plugin for RemoteHand.
 
 ## Status
 
-**v0.1.0 foundation is under active development on `emma/notes-v0.1.0-foundation`.**
+**v0.1.0 is complete and manually accepted on Windows.**
 
-The current foundation includes:
+v0.1.0 includes:
 
 - RemoteHand Plugin API v1 runtime/handshake
 - scoped RemoteHand Vault document access
@@ -51,7 +51,7 @@ Plaintext `storage.plugin` is used only for non-private user preferences. Note t
 
 ~~~powershell
 cd C:\Users\Ringo\remotehand-plugin-notes
-git switch emma/notes-v0.1.0-foundation
+git switch main
 git pull --ff-only
 
 cargo test
@@ -59,6 +59,12 @@ cargo test
 ~~~
 
 The build script produces an installable folder under `dist\remotehand-notes-windows-x86_64` and a validation ZIP with SHA256.
+
+## Validation status
+
+The v0.1.0 implementation was manually accepted with RemoteHand's Vault blob-capable host build. Acceptance covered note/checklist behavior, persistence, Vault lock/unlock redaction, file and image attachments, PNG/WEBP previews, system-open behavior, drag-and-drop, clipboard image paste, attachment reordering/removal, locked-note attachment restrictions, restart persistence, and Trash/permanent-delete cleanup.
+
+The final card UI uses solid selected colors with post-it-style paper treatment; selected note colors are not blended with the RemoteHand surface.
 
 ## Documentation
 

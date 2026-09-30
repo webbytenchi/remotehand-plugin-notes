@@ -434,3 +434,29 @@ This is a legitimate core capability surfaced by a real plugin consumer, not a N
 Because RemoteHand `v1.3.0` is already tagged and its tag must not move, any implemented core change must occur after that commit/tag under the normal RemoteHand version/release workflow.
 
 The currently prepared v1.3.0 GitHub Release remains intentionally unpublished.
+
+
+## 17. Vault status host event required by Notes
+
+During implementation, Notes exposed one additional generic host-integration requirement beyond encrypted blobs:
+
+- plugin panels need immediate notification when RemoteHand Vault locks or unlocks.
+
+RemoteHand now has a focused integration branch:
+
+`emma/notes-vault-status-event`
+
+That branch forwards the existing core `remotehand-vault-status-changed` event into plugin panels as:
+
+~~~javascript
+window.remotehand.onEvent("vault.status", (status) => {
+  // status.exists
+  // status.unlocked
+});
+~~~
+
+Notes uses this notification to immediately clear decrypted UI state when `status.unlocked` becomes false. The redaction path clears pending autosave state, note arrays, board DOM, open editor state, search text, and visible private fields without attempting a Vault write after lock.
+
+This is a generic RemoteHand plugin capability and is not Notes-specific policy.
+
+The existing RemoteHand `v1.3.0` tag remains unchanged. This host-event addition lives after that tagged checkpoint and must follow normal RemoteHand validation before merge/release.

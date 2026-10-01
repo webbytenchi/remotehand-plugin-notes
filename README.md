@@ -22,6 +22,11 @@ v0.1.0 includes:
 - Trash protection for locked notes
 - encrypted file/image attachment storage through RemoteHand Vault blobs
 - attachment picker, drag-and-drop, reorder, image preview, open, and cleanup lifecycle
+
+### Current mainline polish
+
+Current `main` additionally includes post-v0.1.0 UI/UX changes that are not part of the frozen v0.1.0 tag:
+
 - responsive single-line Notes toolbar with adaptive wrapping
 - editor keyboard flow from Title → Body → Labels/tags
 - empty newly-created notes/checklists are discarded when closed without meaningful content

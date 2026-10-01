@@ -4,7 +4,7 @@ Private, Vault-backed sticky-note and checklist plugin for RemoteHand.
 
 ## Status
 
-**v0.1.0 is complete and manually accepted on Windows.**
+**v0.1.0 is complete and manually accepted on Windows. Current `main` also includes post-v0.1.0 UI/UX polish that has not yet been tagged as a new release.**
 
 v0.1.0 includes:
 
@@ -22,6 +22,11 @@ v0.1.0 includes:
 - Trash protection for locked notes
 - encrypted file/image attachment storage through RemoteHand Vault blobs
 - attachment picker, drag-and-drop, reorder, image preview, open, and cleanup lifecycle
+- responsive single-line Notes toolbar with adaptive wrapping
+- editor keyboard flow from Title → Body → Labels/tags
+- empty newly-created notes/checklists are discarded when closed without meaningful content
+- sticky-note sidebar icon and refined folded-corner/diagonal paper-gradient card styling
+- card-level attachment previews with image thumbnails, document tiles, mixed attachment rows, and overflow counts
 
 Attachment bytes are persisted only through RemoteHand's encrypted Vault blob API. Normal note metadata stores opaque attachment references; attachment payloads are never placed in plaintext plugin storage.
 
@@ -64,7 +69,9 @@ The build script produces an installable folder under `dist\remotehand-notes-win
 
 The v0.1.0 implementation was manually accepted with RemoteHand's Vault blob-capable host build. Acceptance covered note/checklist behavior, persistence, Vault lock/unlock redaction, file and image attachments, PNG/WEBP previews, system-open behavior, drag-and-drop, clipboard image paste, attachment reordering/removal, locked-note attachment restrictions, restart persistence, and Trash/permanent-delete cleanup.
 
-The final card UI uses solid selected colors with post-it-style paper treatment; selected note colors are not blended with the RemoteHand surface.
+The current card UI uses the selected note color as its base with a subtle top-left → bottom-right paper gradient, a clipped folded corner, dark ink contrast, and lightweight attachment previews. Image attachments can appear as card thumbnails, non-image files as document tiles, and mixed attachment sets show up to three visible items with a `+N` overflow indicator.
+
+New empty note/checklist drafts are transient: if the editor is closed before the user adds meaningful content (title, body/checklist text, labels, or attachments), the empty draft is discarded instead of leaving an empty card.
 
 ## Documentation
 

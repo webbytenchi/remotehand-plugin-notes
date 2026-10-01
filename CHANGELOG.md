@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- Responsive Notes toolbar that keeps creation, search, view tabs, sort, status, and settings on one line when space allows and adapts cleanly at narrower widths.
+- Editor keyboard flow from Title → Body → Labels/tags, including reverse Shift+Tab navigation for plain notes.
+- Transient empty-draft behavior: newly-created notes/checklists are discarded on close when they contain no meaningful content.
+- Sticky-note sidebar icon aligned with the Notes card visual identity.
+- Card attachment previews: image thumbnails, document/file tiles, mixed attachment rows, and `+N` overflow indication when more than three attachments are present.
+
+### Changed
+- Refined sticky-note cards with a clipped folded corner and a stronger top-left → bottom-right paper gradient.
+- Card attachment indicators now use visible attachment previews instead of the redundant bottom paperclip count.
+- Multiple image/file attachments are represented by their actual attachment types rather than treating all remaining items as additional images.
+
 ## 0.1.0 - 2026-10-01
 
 ### Added

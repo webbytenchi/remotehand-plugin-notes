@@ -19,8 +19,9 @@ input,select,textarea{outline:0}
 .toolbar-reveal{position:absolute;inset:0 0 auto 0;z-index:12;pointer-events:none}
 .toolbar{display:flex;align-items:center;gap:7px;padding:7px 10px;border-bottom:1px solid var(--remotehand-border,#2e3743);background:var(--remotehand-surface,#171d24);flex:0 0 auto;min-height:46px;flex-wrap:nowrap;transform:translateY(calc(-100% - 8px));opacity:0;pointer-events:none;transition:transform .18s ease,opacity .14s ease;box-shadow:0 6px 18px rgba(0,0,0,.28)}
 .toolbar-reveal.open .toolbar{transform:translateY(0);opacity:1;pointer-events:auto}
-.toolbar-handle{position:absolute;top:4px;left:50%;transform:translateX(-50%);width:28px;height:20px;padding:0;border-radius:0 0 8px 8px;border-top:0;display:flex;align-items:center;justify-content:center;pointer-events:auto;opacity:.78;transition:opacity .12s ease,transform .18s ease}
-.toolbar-handle:hover,.toolbar-handle:focus-visible{opacity:1}
+.toolbar-handle{position:absolute;top:0;left:50%;transform:translateX(-50%);width:34px;height:16px;padding:0;border-top:0;border-radius:0 0 7px 7px;background:var(--remotehand-button-background,#232c37);box-shadow:0 2px 5px rgba(0,0,0,.28);display:block;pointer-events:auto;opacity:.86;transition:opacity .12s ease,transform .18s ease,background .12s ease}
+.toolbar-handle::before{content:"";position:absolute;left:50%;top:4px;width:6px;height:6px;border-right:1.5px solid var(--remotehand-muted-text,#9aa8b8);border-bottom:1.5px solid var(--remotehand-muted-text,#9aa8b8);transform:translateX(-50%) rotate(45deg)}
+.toolbar-handle:hover,.toolbar-handle:focus-visible{opacity:1;background:var(--remotehand-button-hover,#2a3542)}
 .toolbar-reveal.open .toolbar-handle{opacity:0;pointer-events:none;transform:translate(-50%,-8px)}
 .toolbar .spacer{flex:1 1 auto;min-width:0}
 .search{flex:1 1 280px;min-width:160px;max-width:420px;padding:6px 9px;background:var(--remotehand-input-background,#0e141a)}
@@ -104,7 +105,7 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
     </select>
     <button id="settingsBtn" title="Notes Settings">⚙</button>
   </div>
-  <button id="toolbarHandle" class="toolbar-handle" type="button" aria-label="Show Notes header" aria-expanded="false" title="Show Notes header">⌄</button>
+  <button id="toolbarHandle" class="toolbar-handle" type="button" aria-label="Show Notes header" aria-expanded="false" title="Show Notes header"></button>
   </div>
   <div id="content" class="board-scroll">
     <div id="lockedVault" class="locked-vault" hidden>
@@ -284,9 +285,9 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
       return "\n" + key + "\n";
     });
     source = source
-      .replace(/^### (.+)$/gm,"<h3>$1</h3>")
-      .replace(/^## (.+)$/gm,"<h2>$1</h2>")
-      .replace(/^# (.+)$/gm,"<h1>$1</h1>")
+      .replace(/^###\s*(\S.*)$/gm,"<h3>$1</h3>")
+      .replace(/^##\s*(\S.*)$/gm,"<h2>$1</h2>")
+      .replace(/^#\s*(\S.*)$/gm,"<h1>$1</h1>")
       .replace(/^&gt; (.+)$/gm,"<blockquote>$1</blockquote>")
       .replace(/\*\*(.+?)\*\*/g,"<strong>$1</strong>")
       .replace(/~~(.+?)~~/g,"<del>$1</del>")

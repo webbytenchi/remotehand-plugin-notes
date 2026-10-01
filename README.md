@@ -4,7 +4,7 @@ Private, Vault-backed sticky-note and checklist plugin for RemoteHand.
 
 ## Status
 
-**v0.1.1 is the current Notes release baseline, building on the complete and manually accepted v0.1.0 foundation with UI/UX polish.**
+**v0.1.2 is the current Notes release baseline, building on the accepted v0.1.1 UI/UX foundation with additional board-space, Markdown, sort-persistence, and attachment-layout improvements.**
 
 v0.1.0 foundation includes:
 
@@ -23,9 +23,19 @@ v0.1.0 foundation includes:
 - encrypted file/image attachment storage through RemoteHand Vault blobs
 - attachment picker, drag-and-drop, reorder, image preview, open, and cleanup lifecycle
 
+### v0.1.2 board and interaction polish
+
+v0.1.2 adds the next accepted Notes usability pass:
+
+- auto-hiding Notes header with a subtle top-edge reveal chevron so cards can use more of the panel
+- double-click empty board space to create a new plain note
+- persistent Sort dropdown preference
+- more forgiving lightweight Markdown heading rendering
+- responsive card attachment previews that show as many image/file tiles as fit before using `+N`
+
 ### v0.1.1 UI/UX polish
 
-v0.1.1 promotes the accepted post-v0.1.0 UI/UX work into the next release baseline:
+v0.1.1 established the first accepted post-v0.1.0 UI/UX baseline:
 
 - responsive single-line Notes toolbar with adaptive wrapping
 - editor keyboard flow from Title → Body → Labels/tags
@@ -74,7 +84,7 @@ The build script produces an installable folder under `dist\remotehand-notes-win
 
 The v0.1.0 implementation was manually accepted with RemoteHand's Vault blob-capable host build. Acceptance covered note/checklist behavior, persistence, Vault lock/unlock redaction, file and image attachments, PNG/WEBP previews, system-open behavior, drag-and-drop, clipboard image paste, attachment reordering/removal, locked-note attachment restrictions, restart persistence, and Trash/permanent-delete cleanup.
 
-The current card UI uses the selected note color as its base with a subtle top-left → bottom-right paper gradient, a clipped folded corner, dark ink contrast, and lightweight attachment previews. Image attachments can appear as card thumbnails, non-image files as document tiles, and mixed attachment sets show up to three visible items with a `+N` overflow indicator.
+The current card UI uses the selected note color as its base with a subtle top-left → bottom-right paper gradient, a clipped folded corner, dark ink contrast, and lightweight attachment previews. Image attachments can appear as card thumbnails, non-image files as document tiles, and mixed attachment sets now show as many tiles as fit in the available card width, with `+N` only when additional attachments do not fit.
 
 New empty note/checklist drafts are transient: if the editor is closed before the user adds meaningful content (title, body/checklist text, labels, or attachments), the empty draft is discarded instead of leaving an empty card.
 
@@ -83,4 +93,5 @@ New empty note/checklist drafts are transient: if the editor is closed before th
 - [v0.1.0 design specification](docs/V0.1.0-SPEC.md)
 - [v0.1.0 acceptance record](docs/V0.1.0-ACCEPTANCE.md)
 - [v0.1.1 acceptance record](docs/V0.1.1-ACCEPTANCE.md)
+- [v0.1.2 acceptance record](docs/V0.1.2-ACCEPTANCE.md)
 - [Vault/storage integration contract](docs/VAULT-INTEGRATION.md)

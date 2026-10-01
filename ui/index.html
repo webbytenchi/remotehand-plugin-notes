@@ -428,8 +428,7 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
       '<div class="card-title">'+esc(note.title||"Untitled")+'</div>'+content+
       (labels?'<div class="labels">'+labels+'</div>':"")+attachmentPreview+
       '<div class="meta"><span>'+new Date(note.updatedAt||note.createdAt).toLocaleString()+'</span>'+
-      (searchInput.value.trim() && note.location==="archive"?'<span>Archived</span>':"")+
-      ((note.attachments||[]).length?'<span>📎 '+note.attachments.length+'</span>':"")+'</div>';
+      (searchInput.value.trim() && note.location==="archive"?'<span>Archived</span>':"")+'</div>';
     el.querySelectorAll(".label").forEach((chip,index)=>chip.addEventListener("click",event=>{
       event.stopPropagation();
       searchInput.value=(note.labels||[])[index]||"";

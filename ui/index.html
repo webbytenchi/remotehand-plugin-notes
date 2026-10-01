@@ -15,15 +15,20 @@ button{padding:6px 10px;cursor:pointer}
 button:hover:not(:disabled){background:var(--remotehand-button-hover,#2a3542)}
 button:disabled{opacity:.45;cursor:default}
 input,select,textarea{outline:0}
-.shell{height:100%;display:flex;flex-direction:column;min-height:0}
-.toolbar{display:flex;align-items:center;gap:7px;padding:7px 10px;border-bottom:1px solid var(--remotehand-border,#2e3743);background:var(--remotehand-surface,#171d24);flex:0 0 auto;min-height:46px;flex-wrap:nowrap}
+.shell{height:100%;display:flex;flex-direction:column;min-height:0;position:relative}
+.toolbar-reveal{position:absolute;inset:0 0 auto 0;z-index:12;pointer-events:none}
+.toolbar{display:flex;align-items:center;gap:7px;padding:7px 10px;border-bottom:1px solid var(--remotehand-border,#2e3743);background:var(--remotehand-surface,#171d24);flex:0 0 auto;min-height:46px;flex-wrap:nowrap;transform:translateY(calc(-100% - 8px));opacity:0;pointer-events:none;transition:transform .18s ease,opacity .14s ease;box-shadow:0 6px 18px rgba(0,0,0,.28)}
+.toolbar-reveal.open .toolbar{transform:translateY(0);opacity:1;pointer-events:auto}
+.toolbar-handle{position:absolute;top:4px;left:50%;transform:translateX(-50%);width:28px;height:20px;padding:0;border-radius:0 0 8px 8px;border-top:0;display:flex;align-items:center;justify-content:center;pointer-events:auto;opacity:.78;transition:opacity .12s ease,transform .18s ease}
+.toolbar-handle:hover,.toolbar-handle:focus-visible{opacity:1}
+.toolbar-reveal.open .toolbar-handle{opacity:0;pointer-events:none;transform:translate(-50%,-8px)}
 .toolbar .spacer{flex:1 1 auto;min-width:0}
 .search{flex:1 1 280px;min-width:160px;max-width:420px;padding:6px 9px;background:var(--remotehand-input-background,#0e141a)}
 .nav{display:flex;align-items:center;gap:3px;flex:0 0 auto;border-left:1px solid var(--remotehand-border,#2e3743);padding-left:8px;margin-left:1px}
 .nav button{border-color:transparent;background:transparent;color:var(--remotehand-muted-text,#9aa8b8)}
 .nav button.active{background:var(--remotehand-button-background,#232c37);border-color:var(--remotehand-border,#3d4a58);color:var(--remotehand-text,#eef3f8)}
 .status{flex:0 1 240px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--remotehand-muted-text,#9aa8b8);font-size:12px}
-.board-scroll{min-height:0;flex:1;overflow:auto;padding:14px}
+.board-scroll{min-height:0;flex:1;overflow:auto;padding:16px 14px 14px}
 .section-title{display:flex;align-items:center;gap:8px;margin:0 0 9px;font-weight:700;color:var(--remotehand-muted-text,#9aa8b8);font-size:12px;text-transform:uppercase;letter-spacing:.08em}
 .section-title:not(:first-child){margin-top:18px}
 .board{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));grid-auto-rows:8px;gap:10px;align-items:start}
@@ -78,7 +83,8 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
 </head>
 <body>
 <div class="shell">
-  <div class="toolbar">
+  <div id="toolbarReveal" class="toolbar-reveal">
+  <div id="toolbar" class="toolbar">
     <button id="newNoteBtn" class="primary" title="New note (Ctrl+N)">+ Note</button>
     <button id="newChecklistBtn" title="New checklist (Ctrl+Shift+N)">+ Checklist</button>
     <input id="searchInput" class="search" type="search" placeholder="Search notes, checklists, labels..." aria-label="Search Notes">
@@ -97,6 +103,8 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
       <option value="title">Title</option>
     </select>
     <button id="settingsBtn" title="Notes Settings">⚙</button>
+  </div>
+  <button id="toolbarHandle" class="toolbar-handle" type="button" aria-label="Show Notes header" aria-expanded="false" title="Show Notes header">⌄</button>
   </div>
   <div id="content" class="board-scroll">
     <div id="lockedVault" class="locked-vault" hidden>
@@ -236,6 +244,9 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
   const saveState = $("saveState");
   const editorNotice = $("editorNotice");
   const attachmentList = $("attachmentList");
+  const toolbarReveal = $("toolbarReveal");
+  const toolbarHandle = $("toolbarHandle");
+  let toolbarHideTimer = null;
 
   let notes = [];
   let catalog = {version:1,noteIds:[],manualOrder:{main:[],archive:[],trash:[]},pinnedOrder:[]};
@@ -351,6 +362,22 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
     status.style.color = error ? "var(--remotehand-danger-text,#efaaaa)" : "";
   }
 
+  function showToolbar() {
+    clearTimeout(toolbarHideTimer);
+    toolbarHideTimer=null;
+    toolbarReveal.classList.add("open");
+    toolbarHandle.setAttribute("aria-expanded","true");
+  }
+
+  function scheduleToolbarHide(delay=420) {
+    clearTimeout(toolbarHideTimer);
+    toolbarHideTimer=setTimeout(()=>{
+      if(toolbarReveal.contains(document.activeElement))return;
+      toolbarReveal.classList.remove("open");
+      toolbarHandle.setAttribute("aria-expanded","false");
+    },delay);
+  }
+
   function ensureCatalog() {
     catalog.noteIds = Array.isArray(catalog.noteIds) ? catalog.noteIds : [];
     catalog.manualOrder = catalog.manualOrder && typeof catalog.manualOrder === "object" ? catalog.manualOrder : {};
@@ -417,17 +444,15 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
     const labels=(note.labels||[]).map(label=>'<span class="label">'+esc(label)+'</span>').join("");
     const content=note.type==="checklist" ? renderChecklistPreview(note) : '<div class="card-body">'+markdown(note.body||"")+'</div>';
     const attachments=Array.isArray(note.attachments)?note.attachments:[];
-    const visibleAttachments=attachments.slice(0,3);
-    const hiddenAttachmentCount=Math.max(0,attachments.length-visibleAttachments.length);
-    const attachmentTiles=visibleAttachments.map((attachment,index)=>{
+    const attachmentTiles=attachments.map(attachment=>{
       const isImage=String(attachment.mediaType||"").startsWith("image/")&&Number(attachment.size)<=8*1024*1024;
       if(isImage){
-        return '<div class="card-attachment-tile" data-preview-blob="'+esc(attachment.blobKey||"")+'" data-preview-type="'+esc(attachment.mediaType||"image/*")+'" data-preview-name="'+esc(attachment.name||"Image attachment")+'"><img alt="'+esc(attachment.name||"Image attachment")+'" hidden></div>';
+        return '<div class="card-attachment-tile" data-card-attachment data-preview-blob="'+esc(attachment.blobKey||"")+'" data-preview-type="'+esc(attachment.mediaType||"image/*")+'" data-preview-name="'+esc(attachment.name||"Image attachment")+'"><img alt="'+esc(attachment.name||"Image attachment")+'" hidden></div>';
       }
-      return '<div class="card-attachment-tile"><div class="card-file-tile"><span class="card-file-icon">📄</span><span class="card-file-ext">'+esc(attachmentExtension(attachment.name))+'</span></div></div>';
+      return '<div class="card-attachment-tile" data-card-attachment><div class="card-file-tile"><span class="card-file-icon">📄</span><span class="card-file-ext">'+esc(attachmentExtension(attachment.name))+'</span></div></div>';
     }).join("");
     const attachmentPreview=attachments.length
-      ? '<div class="card-attachments">'+attachmentTiles+(hiddenAttachmentCount?'<div class="card-attachment-more">+'+hiddenAttachmentCount+'</div>':"")+'</div>'
+      ? '<div class="card-attachments">'+attachmentTiles+'<div class="card-attachment-more" data-attachment-more hidden></div></div>'
       : "";
     el.innerHTML =
       '<div class="card-tools"><span title="'+(note.locked?"Locked":"Unlocked")+'">'+(note.locked?"🔒":"")+'</span>'+(note.pinned?'<span title="Pinned">📌</span>':"")+'</div>'+
@@ -487,8 +512,30 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
     }
   }
 
+  function layoutCardAttachments(card) {
+    const host=card.querySelector(".card-attachments");
+    if(!host)return;
+    const tiles=Array.from(host.querySelectorAll("[data-card-attachment]"));
+    const more=host.querySelector("[data-attachment-more]");
+    if(!more||tiles.length===0)return;
+    tiles.forEach(tile=>{tile.hidden=false;});
+    more.hidden=true;
+    const available=host.clientWidth;
+    const tileWidth=64;
+    const moreWidth=42;
+    const gap=5;
+    const allWidth=tiles.length*tileWidth+Math.max(0,tiles.length-1)*gap;
+    if(!available||allWidth<=available)return;
+    const visible=Math.max(1,Math.floor((available-moreWidth)/(tileWidth+gap)));
+    tiles.forEach((tile,index)=>{tile.hidden=index>=visible;});
+    const hidden=Math.max(0,tiles.length-visible);
+    more.textContent="+"+hidden;
+    more.hidden=hidden===0;
+  }
+
   function resizeMasonry() {
     document.querySelectorAll(".card").forEach(card=>{
+      layoutCardAttachments(card);
       card.style.gridRowEnd="auto";
       const boardEl=card.parentElement;
       const row=parseInt(getComputedStyle(boardEl).gridAutoRows)||8;
@@ -1134,6 +1181,14 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
     try{const result=await request("settings.set",{settings});settings=result.settings||settings;sortSelect.value=settings.defaultSort;$("settingsBackdrop").hidden=true;renderBoard();setStatus("Notes settings saved.");}
     catch(error){setStatus(String(error),true);}
   }
+
+  toolbarHandle.addEventListener("mouseenter",showToolbar);
+  toolbarHandle.addEventListener("focus",showToolbar);
+  toolbarHandle.addEventListener("click",showToolbar);
+  $("toolbar").addEventListener("mouseenter",showToolbar);
+  $("toolbar").addEventListener("mouseleave",()=>scheduleToolbarHide());
+  toolbarReveal.addEventListener("focusin",showToolbar);
+  toolbarReveal.addEventListener("focusout",()=>scheduleToolbarHide(220));
 
   $("newNoteBtn").addEventListener("click",()=>createNote("note"));
   $("newChecklistBtn").addEventListener("click",()=>createNote("checklist"));

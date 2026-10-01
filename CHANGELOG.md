@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.2 - 2026-10-01
+
+### Added
+- Auto-hiding Notes header so the card board can use the full panel height, with a subtle top-edge reveal chevron and animated drop-down behavior.
+- Double-clicking empty board space creates a new plain note while preserving normal card/control interactions.
+
+### Changed
+- Card attachment previews now adapt to available card width and show as many image/file tiles as fit before using a `+N` overflow indicator.
+- Lightweight Markdown heading rendering is more forgiving and accepts headings with or without a space after the `#` markers.
+
+### Fixed
+- The board Sort dropdown now persists the selected sort preference through Notes settings and restores it on reload/restart.
+- Markdown preview handling was hardened so supported lightweight Markdown renders correctly after editing.
+
 ## 0.1.1 - 2026-10-01
 
 ### Added

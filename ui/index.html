@@ -28,10 +28,9 @@ input,select,textarea{outline:0}
 .section-title:not(:first-child){margin-top:18px}
 .board{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));grid-auto-rows:8px;gap:10px;align-items:start}
 .compact .card{padding:10px 11px;min-height:86px}.compact .card-body{-webkit-line-clamp:5}.compact .meta{margin-top:6px}
-.card{--note-ink:#20242a;position:relative;border:0;border-radius:3px;background:var(--note-color,#f2cf66);color:var(--note-ink);padding:14px 14px 13px;box-shadow:0 5px 12px rgba(0,0,0,.24),0 1px 1px rgba(255,255,255,.35) inset;cursor:pointer;overflow:hidden;min-height:112px;transform:translateY(0);transition:transform .12s ease,box-shadow .12s ease;isolation:isolate}
-.card::before{content:"";position:absolute;right:-2px;bottom:-2px;width:18px;height:18px;background:var(--remotehand-background,#11151a);clip-path:polygon(100% 0,100% 100%,0 100%);pointer-events:none;z-index:1}
-.card::after{content:"";position:absolute;right:-1px;bottom:-1px;width:15px;height:15px;background:color-mix(in srgb,var(--note-color,#f2cf66) 72%,#fff 28%);clip-path:polygon(0 0,100% 0,0 100%);pointer-events:none;z-index:2}
-.card:hover{transform:translateY(-2px);box-shadow:0 8px 16px rgba(0,0,0,.28),0 1px 1px rgba(255,255,255,.38) inset}
+.card{--note-ink:#20242a;position:relative;border:0;border-radius:3px;background:var(--note-color,#f2cf66);color:var(--note-ink);padding:14px 14px 13px;filter:drop-shadow(0 5px 6px rgba(0,0,0,.24));cursor:pointer;overflow:hidden;min-height:112px;transform:translateY(0);transition:transform .12s ease,filter .12s ease;clip-path:polygon(0 0,100% 0,100% calc(100% - 15px),calc(100% - 15px) 100%,0 100%)}
+.card::after{content:"";position:absolute;right:0;bottom:0;width:15px;height:15px;background:color-mix(in srgb,var(--note-color,#f2cf66) 72%,#fff 28%);clip-path:polygon(0 0,100% 0,0 100%);pointer-events:none}
+.card:hover{transform:translateY(-2px);filter:drop-shadow(0 8px 8px rgba(0,0,0,.28))}
 .card.dragging{opacity:.42}
 .card.drop-target{outline:2px solid var(--remotehand-accent-border,#6f9bc8);outline-offset:2px}
 .card-title{font-weight:750;font-size:14px;line-height:1.32;margin:0 28px 8px 0;color:var(--note-ink);overflow-wrap:anywhere}

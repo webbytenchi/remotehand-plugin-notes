@@ -39,6 +39,12 @@ input,select,textarea{outline:0}
 .card-tools{position:absolute;top:7px;right:7px;display:flex;gap:3px;color:var(--note-ink);opacity:.42}.card:hover .card-tools{opacity:.9}
 .icon-btn{border:0;background:transparent;padding:3px 5px;min-width:24px}
 .labels{display:flex;flex-wrap:wrap;gap:4px;margin-top:9px}.label{font-size:11px;padding:2px 6px;border-radius:999px;color:var(--note-ink);background:rgba(0,0,0,.12)}
+.card-photo{position:relative;width:min(132px,72%);height:82px;margin:10px 0 2px;border-radius:4px}
+.card-photo::before,.card-photo::after{content:"";position:absolute;inset:3px -5px -3px 5px;border-radius:4px;background:color-mix(in srgb,var(--note-color,#f2cf66) 76%,#fff 24%);box-shadow:0 1px 3px rgba(0,0,0,.18);transform:rotate(2deg)}
+.card-photo::after{inset:1px -3px -1px 3px;transform:rotate(-1deg)}
+.card-photo.single::before,.card-photo.single::after{display:none}
+.card-photo img{position:relative;z-index:2;width:100%;height:100%;display:block;object-fit:cover;border-radius:4px;background:rgba(255,255,255,.2);box-shadow:0 2px 5px rgba(0,0,0,.24)}
+.card-photo-badge{position:absolute;z-index:3;right:5px;bottom:5px;min-width:24px;padding:2px 6px;border-radius:999px;background:rgba(20,24,28,.78);color:#fff;font-size:11px;font-weight:700;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.22)}
 .meta{margin-top:9px;color:rgba(32,36,42,.72);font-size:11px;display:flex;gap:8px;flex-wrap:wrap}
 .check-preview{display:flex;flex-direction:column;gap:4px;color:var(--note-ink)}.check-line{display:flex;gap:6px;align-items:flex-start}.check-line.done{text-decoration:line-through;opacity:.58}
 .empty{padding:44px 16px;text-align:center;color:var(--remotehand-muted-text,#9aa8b8)}
@@ -249,6 +255,7 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
   let confirmResolve = null;
   let draggedAttachmentId = null;
   let attachmentPreviewGeneration = 0;
+  let boardPreviewGeneration = 0;
   const attachmentPreviewUrls = new Map();
   const transientNewIds = new Set();
 
@@ -396,10 +403,17 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
     el.style.setProperty("--note-color",cardColor(note));
     const labels=(note.labels||[]).map(label=>'<span class="label">'+esc(label)+'</span>').join("");
     const content=note.type==="checklist" ? renderChecklistPreview(note) : '<div class="card-body">'+markdown(note.body||"")+'</div>';
+    const imageAttachments=(note.attachments||[]).filter(attachment=>String(attachment.mediaType||"").startsWith("image/")&&Number(attachment.size)<=8*1024*1024);
+    const photo=imageAttachments.length
+      ? '<div class="card-photo '+(imageAttachments.length>1?"stacked":"single")+'" data-preview-blob="'+esc(imageAttachments[0].blobKey||"")+'" data-preview-type="'+esc(imageAttachments[0].mediaType||"image/*")+'" data-preview-name="'+esc(imageAttachments[0].name||"Image attachment")+'">'+
+        '<img alt="'+esc(imageAttachments[0].name||"Image attachment")+'" hidden>'+
+        (imageAttachments.length>1?'<span class="card-photo-badge">+'+(imageAttachments.length-1)+'</span>':"")+
+        '</div>'
+      : "";
     el.innerHTML =
       '<div class="card-tools"><span title="'+(note.locked?"Locked":"Unlocked")+'">'+(note.locked?"🔒":"")+'</span>'+(note.pinned?'<span title="Pinned">📌</span>':"")+'</div>'+
       '<div class="card-title">'+esc(note.title||"Untitled")+'</div>'+content+
-      (labels?'<div class="labels">'+labels+'</div>':"")+
+      (labels?'<div class="labels">'+labels+'</div>':"")+photo+
       '<div class="meta"><span>'+new Date(note.updatedAt||note.createdAt).toLocaleString()+'</span>'+
       (searchInput.value.trim() && note.location==="archive"?'<span>Archived</span>':"")+
       ((note.attachments||[]).length?'<span>📎 '+note.attachments.length+'</span>':"")+'</div>';
@@ -421,6 +435,32 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
     return el;
   }
 
+  async function loadBoardPreviews(generation) {
+    const previewHosts=Array.from(document.querySelectorAll(".card-photo[data-preview-blob]"));
+    for(const host of previewHosts){
+      if(generation!==boardPreviewGeneration||!document.body.contains(host))return;
+      const blobKey=host.dataset.previewBlob;
+      if(!blobKey)continue;
+      try{
+        const result=await request("attachment.preview",{blobKey});
+        if(generation!==boardPreviewGeneration||!document.body.contains(host)||!result?.data)continue;
+        const img=host.querySelector("img");
+        if(!img)continue;
+        img.src=base64NoPadToDataUrl(result.data,host.dataset.previewType);
+        img.hidden=false;
+        img.addEventListener("load",()=>requestAnimationFrame(resizeMasonry),{once:true});
+        img.addEventListener("error",()=>{
+          host.remove();
+          requestAnimationFrame(resizeMasonry);
+        },{once:true});
+      }catch{
+        if(generation!==boardPreviewGeneration)return;
+        host.remove();
+        requestAnimationFrame(resizeMasonry);
+      }
+    }
+  }
+
   function resizeMasonry() {
     document.querySelectorAll(".card").forEach(card=>{
       card.style.gridRowEnd="auto";
@@ -434,6 +474,8 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
 
   function renderBoard() {
     ensureCatalog();
+    boardPreviewGeneration+=1;
+    const previewGeneration=boardPreviewGeneration;
     const list=orderedNotes(currentView);
     const pinned=currentView==="main" ? list.filter(note=>note.location==="main"&&note.pinned) : [];
     const normal=currentView==="main" ? list.filter(note=>note.location!=="main"||!note.pinned) : list;
@@ -448,6 +490,7 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
     document.querySelectorAll(".nav button[data-view]").forEach(btn=>btn.classList.toggle("active",btn.dataset.view===currentView));
     boardHost.classList.toggle("compact",settings.cardDensity==="compact");
     requestAnimationFrame(resizeMasonry);
+    void loadBoardPreviews(previewGeneration);
   }
 
   async function persistCatalog() {
@@ -1002,6 +1045,7 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
     clearTimeout(autosaveTimer);
     autosaveTimer=null;
     notes=[];
+    boardPreviewGeneration+=1;
     transientNewIds.clear();
     activeId=null;
     editorDraft=null;

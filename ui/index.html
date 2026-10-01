@@ -39,14 +39,12 @@ input,select,textarea{outline:0}
 .card-tools{position:absolute;top:7px;right:7px;display:flex;gap:3px;color:var(--note-ink);opacity:.42}.card:hover .card-tools{opacity:.9}
 .icon-btn{border:0;background:transparent;padding:3px 5px;min-width:24px}
 .labels{display:flex;flex-wrap:wrap;gap:4px;margin-top:9px}.label{font-size:11px;padding:2px 6px;border-radius:999px;color:var(--note-ink);background:rgba(0,0,0,.12)}
-.card-photo{position:relative;width:min(132px,72%);height:82px;margin:10px 0 2px;border-radius:4px}
-.card-photo::before,.card-photo::after{content:"";position:absolute;inset:3px -5px -3px 5px;border-radius:4px;background:color-mix(in srgb,var(--note-color,#f2cf66) 76%,#fff 24%);box-shadow:0 1px 3px rgba(0,0,0,.18);transform:rotate(2deg)}
-.card-photo::after{inset:1px -3px -1px 3px;transform:rotate(-1deg)}
-.card-photo.single::before,.card-photo.single::after{display:none}
-.card-photo img{position:relative;z-index:2;width:100%;height:100%;display:block;object-fit:cover;border-radius:4px;background:rgba(255,255,255,.2);box-shadow:0 2px 5px rgba(0,0,0,.24)}
-.card-file-tile{position:relative;z-index:2;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border-radius:4px;background:color-mix(in srgb,var(--note-color,#f2cf66) 68%,#fff 32%);box-shadow:0 2px 5px rgba(0,0,0,.24);color:var(--note-ink)}
-.card-file-icon{font-size:25px;line-height:1}.card-file-ext{font-size:10px;font-weight:800;letter-spacing:.08em;max-width:88%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.card-photo-badge{position:absolute;z-index:3;right:5px;bottom:5px;min-width:24px;padding:2px 6px;border-radius:999px;background:rgba(20,24,28,.78);color:#fff;font-size:11px;font-weight:700;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.22)}
+.card-attachments{display:flex;align-items:flex-end;gap:5px;margin:10px 0 2px;min-height:64px}
+.card-attachment-tile{position:relative;width:64px;height:64px;flex:0 0 64px;border-radius:4px;overflow:hidden;background:color-mix(in srgb,var(--note-color,#f2cf66) 70%,#fff 30%);box-shadow:0 2px 5px rgba(0,0,0,.24)}
+.card-attachment-tile img{width:100%;height:100%;display:block;object-fit:cover}
+.card-file-tile{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:var(--note-ink)}
+.card-file-icon{font-size:23px;line-height:1}.card-file-ext{font-size:9px;font-weight:800;letter-spacing:.08em;max-width:86%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card-attachment-more{display:flex;align-items:center;justify-content:center;width:42px;height:42px;flex:0 0 42px;border-radius:4px;background:rgba(20,24,28,.78);color:#fff;font-size:11px;font-weight:700;box-shadow:0 2px 5px rgba(0,0,0,.22)}
 .meta{margin-top:9px;color:rgba(32,36,42,.72);font-size:11px;display:flex;gap:8px;flex-wrap:wrap}
 .check-preview{display:flex;flex-direction:column;gap:4px;color:var(--note-ink)}.check-line{display:flex;gap:6px;align-items:flex-start}.check-line.done{text-decoration:line-through;opacity:.58}
 .empty{padding:44px 16px;text-align:center;color:var(--remotehand-muted-text,#9aa8b8)}
@@ -413,24 +411,18 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
     const labels=(note.labels||[]).map(label=>'<span class="label">'+esc(label)+'</span>').join("");
     const content=note.type==="checklist" ? renderChecklistPreview(note) : '<div class="card-body">'+markdown(note.body||"")+'</div>';
     const attachments=Array.isArray(note.attachments)?note.attachments:[];
-    const firstImage=attachments.find(attachment=>String(attachment.mediaType||"").startsWith("image/")&&Number(attachment.size)<=8*1024*1024);
-    const previewAttachment=firstImage||attachments[0]||null;
-    const extraCount=Math.max(0,attachments.length-1);
-    let attachmentPreview="";
-    if(previewAttachment){
-      const stacked=attachments.length>1?"stacked":"single";
-      if(firstImage){
-        attachmentPreview='<div class="card-photo '+stacked+'" data-preview-blob="'+esc(firstImage.blobKey||"")+'" data-preview-type="'+esc(firstImage.mediaType||"image/*")+'" data-preview-name="'+esc(firstImage.name||"Image attachment")+'">'+
-          '<img alt="'+esc(firstImage.name||"Image attachment")+'" hidden>'+
-          (extraCount?'<span class="card-photo-badge">+'+extraCount+'</span>':"")+
-          '</div>';
-      }else{
-        attachmentPreview='<div class="card-photo '+stacked+'">'+
-          '<div class="card-file-tile"><span class="card-file-icon">📄</span><span class="card-file-ext">'+esc(attachmentExtension(previewAttachment.name))+'</span></div>'+
-          (extraCount?'<span class="card-photo-badge">+'+extraCount+'</span>':"")+
-          '</div>';
+    const visibleAttachments=attachments.slice(0,3);
+    const hiddenAttachmentCount=Math.max(0,attachments.length-visibleAttachments.length);
+    const attachmentTiles=visibleAttachments.map((attachment,index)=>{
+      const isImage=String(attachment.mediaType||"").startsWith("image/")&&Number(attachment.size)<=8*1024*1024;
+      if(isImage){
+        return '<div class="card-attachment-tile" data-preview-blob="'+esc(attachment.blobKey||"")+'" data-preview-type="'+esc(attachment.mediaType||"image/*")+'" data-preview-name="'+esc(attachment.name||"Image attachment")+'"><img alt="'+esc(attachment.name||"Image attachment")+'" hidden></div>';
       }
-    }
+      return '<div class="card-attachment-tile"><div class="card-file-tile"><span class="card-file-icon">📄</span><span class="card-file-ext">'+esc(attachmentExtension(attachment.name))+'</span></div></div>';
+    }).join("");
+    const attachmentPreview=attachments.length
+      ? '<div class="card-attachments">'+attachmentTiles+(hiddenAttachmentCount?'<div class="card-attachment-more">+'+hiddenAttachmentCount+'</div>':"")+'</div>'
+      : "";
     el.innerHTML =
       '<div class="card-tools"><span title="'+(note.locked?"Locked":"Unlocked")+'">'+(note.locked?"🔒":"")+'</span>'+(note.pinned?'<span title="Pinned">📌</span>':"")+'</div>'+
       '<div class="card-title">'+esc(note.title||"Untitled")+'</div>'+content+
@@ -457,7 +449,7 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
   }
 
   async function loadBoardPreviews(generation) {
-    const previewHosts=Array.from(document.querySelectorAll(".card-photo[data-preview-blob]"));
+    const previewHosts=Array.from(document.querySelectorAll(".card-attachment-tile[data-preview-blob]"));
     for(const host of previewHosts){
       if(generation!==boardPreviewGeneration||!document.body.contains(host))return;
       const blobKey=host.dataset.previewBlob;
@@ -471,12 +463,20 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
         img.hidden=false;
         img.addEventListener("load",()=>requestAnimationFrame(resizeMasonry),{once:true});
         img.addEventListener("error",()=>{
-          host.remove();
+          host.replaceChildren();
+          const fallback=document.createElement("div");
+          fallback.className="card-file-tile";
+          fallback.innerHTML='<span class="card-file-icon">🖼</span><span class="card-file-ext">IMAGE</span>';
+          host.append(fallback);
           requestAnimationFrame(resizeMasonry);
         },{once:true});
       }catch{
         if(generation!==boardPreviewGeneration)return;
-        host.remove();
+        host.replaceChildren();
+        const fallback=document.createElement("div");
+        fallback.className="card-file-tile";
+        fallback.innerHTML='<span class="card-file-icon">🖼</span><span class="card-file-ext">IMAGE</span>';
+        host.append(fallback);
         requestAnimationFrame(resizeMasonry);
       }
     }

@@ -44,6 +44,8 @@ input,select,textarea{outline:0}
 .card-photo::after{inset:1px -3px -1px 3px;transform:rotate(-1deg)}
 .card-photo.single::before,.card-photo.single::after{display:none}
 .card-photo img{position:relative;z-index:2;width:100%;height:100%;display:block;object-fit:cover;border-radius:4px;background:rgba(255,255,255,.2);box-shadow:0 2px 5px rgba(0,0,0,.24)}
+.card-file-tile{position:relative;z-index:2;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border-radius:4px;background:color-mix(in srgb,var(--note-color,#f2cf66) 68%,#fff 32%);box-shadow:0 2px 5px rgba(0,0,0,.24);color:var(--note-ink)}
+.card-file-icon{font-size:25px;line-height:1}.card-file-ext{font-size:10px;font-weight:800;letter-spacing:.08em;max-width:88%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .card-photo-badge{position:absolute;z-index:3;right:5px;bottom:5px;min-width:24px;padding:2px 6px;border-radius:999px;background:rgba(20,24,28,.78);color:#fff;font-size:11px;font-weight:700;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.22)}
 .meta{margin-top:9px;color:rgba(32,36,42,.72);font-size:11px;display:flex;gap:8px;flex-wrap:wrap}
 .check-preview{display:flex;flex-direction:column;gap:4px;color:var(--note-ink)}.check-line{display:flex;gap:6px;align-items:flex-start}.check-line.done{text-decoration:line-through;opacity:.58}
@@ -395,6 +397,13 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
     return '<div class="check-preview">'+lines+(more?'<div class="meta">+'+more+' more</div>':"")+'</div>';
   }
 
+  function attachmentExtension(name) {
+    const value=String(name||"").trim();
+    const dot=value.lastIndexOf(".");
+    if(dot<=0||dot===value.length-1)return "FILE";
+    return value.slice(dot+1).toUpperCase().slice(0,6);
+  }
+
   function createCard(note) {
     const el=document.createElement("article");
     el.className="card";
@@ -403,17 +412,29 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
     el.style.setProperty("--note-color",cardColor(note));
     const labels=(note.labels||[]).map(label=>'<span class="label">'+esc(label)+'</span>').join("");
     const content=note.type==="checklist" ? renderChecklistPreview(note) : '<div class="card-body">'+markdown(note.body||"")+'</div>';
-    const imageAttachments=(note.attachments||[]).filter(attachment=>String(attachment.mediaType||"").startsWith("image/")&&Number(attachment.size)<=8*1024*1024);
-    const photo=imageAttachments.length
-      ? '<div class="card-photo '+(imageAttachments.length>1?"stacked":"single")+'" data-preview-blob="'+esc(imageAttachments[0].blobKey||"")+'" data-preview-type="'+esc(imageAttachments[0].mediaType||"image/*")+'" data-preview-name="'+esc(imageAttachments[0].name||"Image attachment")+'">'+
-        '<img alt="'+esc(imageAttachments[0].name||"Image attachment")+'" hidden>'+
-        (imageAttachments.length>1?'<span class="card-photo-badge">+'+(imageAttachments.length-1)+'</span>':"")+
-        '</div>'
-      : "";
+    const attachments=Array.isArray(note.attachments)?note.attachments:[];
+    const firstImage=attachments.find(attachment=>String(attachment.mediaType||"").startsWith("image/")&&Number(attachment.size)<=8*1024*1024);
+    const previewAttachment=firstImage||attachments[0]||null;
+    const extraCount=Math.max(0,attachments.length-1);
+    let attachmentPreview="";
+    if(previewAttachment){
+      const stacked=attachments.length>1?"stacked":"single";
+      if(firstImage){
+        attachmentPreview='<div class="card-photo '+stacked+'" data-preview-blob="'+esc(firstImage.blobKey||"")+'" data-preview-type="'+esc(firstImage.mediaType||"image/*")+'" data-preview-name="'+esc(firstImage.name||"Image attachment")+'">'+
+          '<img alt="'+esc(firstImage.name||"Image attachment")+'" hidden>'+
+          (extraCount?'<span class="card-photo-badge">+'+extraCount+'</span>':"")+
+          '</div>';
+      }else{
+        attachmentPreview='<div class="card-photo '+stacked+'">'+
+          '<div class="card-file-tile"><span class="card-file-icon">📄</span><span class="card-file-ext">'+esc(attachmentExtension(previewAttachment.name))+'</span></div>'+
+          (extraCount?'<span class="card-photo-badge">+'+extraCount+'</span>':"")+
+          '</div>';
+      }
+    }
     el.innerHTML =
       '<div class="card-tools"><span title="'+(note.locked?"Locked":"Unlocked")+'">'+(note.locked?"🔒":"")+'</span>'+(note.pinned?'<span title="Pinned">📌</span>':"")+'</div>'+
       '<div class="card-title">'+esc(note.title||"Untitled")+'</div>'+content+
-      (labels?'<div class="labels">'+labels+'</div>':"")+photo+
+      (labels?'<div class="labels">'+labels+'</div>':"")+attachmentPreview+
       '<div class="meta"><span>'+new Date(note.updatedAt||note.createdAt).toLocaleString()+'</span>'+
       (searchInput.value.trim() && note.location==="archive"?'<span>Archived</span>':"")+
       ((note.attachments||[]).length?'<span>📎 '+note.attachments.length+'</span>':"")+'</div>';

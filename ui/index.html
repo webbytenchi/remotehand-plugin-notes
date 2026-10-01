@@ -250,6 +250,7 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
   let draggedAttachmentId = null;
   let attachmentPreviewGeneration = 0;
   const attachmentPreviewUrls = new Map();
+  const transientNewIds = new Set();
 
   const nowIso = () => new Date().toISOString();
   const newId = () => crypto.randomUUID();
@@ -479,6 +480,31 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
 
   function clone(value){ return JSON.parse(JSON.stringify(value)); }
 
+  function noteHasMeaningfulContent(note) {
+    if(!note)return false;
+    if(String(note.title||"").trim())return true;
+    if(String(note.body||"").trim())return true;
+    if((note.labels||[]).some(label=>String(label||"").trim()))return true;
+    if((note.checklist||[]).some(item=>String(item?.text||"").trim()))return true;
+    if((note.attachments||[]).length>0)return true;
+    return false;
+  }
+
+  function removeIdFromLocalCatalog(id) {
+    ensureCatalog();
+    catalog.noteIds=catalog.noteIds.filter(item=>item!==id);
+    catalog.pinnedOrder=catalog.pinnedOrder.filter(item=>item!==id);
+    for(const view of ["main","archive","trash"]){
+      catalog.manualOrder[view]=catalog.manualOrder[view].filter(item=>item!==id);
+    }
+  }
+
+  function discardTransientDraftLocal(id) {
+    transientNewIds.delete(id);
+    notes=notes.filter(note=>note.id!==id);
+    removeIdFromLocalCatalog(id);
+  }
+
   function openEditor(id) {
     const note=notes.find(item=>item.id===id); if(!note)return;
     activeId=id;editorDraft=clone(note);markdownEditing=false;
@@ -500,9 +526,13 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
   }
 
   async function createNote(type) {
-    const note=makeNote(type);notes.push(note);catalog.noteIds.push(note.id);catalog.manualOrder.main.unshift(note.id);
-    renderBoard();openEditor(note.id);
-    try{await saveDraft(true);await persistCatalog();}catch(error){setStatus(String(error),true);}
+    const note=makeNote(type);
+    notes.push(note);
+    catalog.noteIds.push(note.id);
+    catalog.manualOrder.main.unshift(note.id);
+    transientNewIds.add(note.id);
+    renderBoard();
+    openEditor(note.id);
   }
 
   function syncDraftFromFields() {
@@ -526,9 +556,18 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
     if(!force&&editorDraft.locked)return;
     syncDraftFromFields();
     const payload=clone(editorDraft);
+    const transient=transientNewIds.has(payload.id);
+    if(transient&&!noteHasMeaningfulContent(payload)){
+      saveState.textContent="Saved";
+      return;
+    }
     saveChain=saveChain.then(()=>request("notes.save",{note:payload}));
     try{
       await saveChain;
+      if(transient){
+        await persistCatalog();
+        transientNewIds.delete(payload.id);
+      }
       const index=notes.findIndex(note=>note.id===payload.id);
       if(index>=0) notes[index]=clone(payload); else notes.push(clone(payload));
       saveState.textContent="Saved";
@@ -896,6 +935,14 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
   async function toggleLock() {
     if(!editorDraft)return;
     syncDraftFromFields();
+    if(transientNewIds.has(editorDraft.id)&&!noteHasMeaningfulContent(editorDraft)){
+      editorDraft.locked=!editorDraft.locked;
+      const i=notes.findIndex(n=>n.id===editorDraft.id);
+      if(i>=0)notes[i]=clone(editorDraft);
+      renderEditor();
+      renderBoard();
+      return;
+    }
     if(!editorDraft.locked) await saveDraft(true);
     editorDraft.locked=!editorDraft.locked;
     try{await request("notes.save",{note:clone(editorDraft)});const i=notes.findIndex(n=>n.id===editorDraft.id);notes[i]=clone(editorDraft);renderEditor();renderBoard();setStatus(editorDraft.locked?"Note locked against changes.":"Note unlocked.");}
@@ -904,6 +951,12 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
 
   async function changeLocation(next) {
     if(!editorDraft)return;
+    syncDraftFromFields();
+    if(transientNewIds.has(editorDraft.id)&&!noteHasMeaningfulContent(editorDraft)){
+      closeEditor();
+      setStatus("Empty note discarded.");
+      return;
+    }
     if(editorDraft.locked && next!=="main"){setStatus("Locked notes cannot be archived or moved to Trash.",true);return;}
     editorDraft.location=next;editorDraft.updatedAt=nowIso();
     try{await request("notes.save",{note:clone(editorDraft)});const i=notes.findIndex(n=>n.id===editorDraft.id);notes[i]=clone(editorDraft);closeEditor();renderBoard();setStatus(next==="main"?"Note restored.":next==="archive"?"Note archived.":"Note moved to Trash.");}
@@ -926,12 +979,30 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
     }catch(error){setStatus(String(error),true);}
   }
 
-  function closeEditor(){clearTimeout(autosaveTimer);if(editorDraft&&!editorDraft.locked)void saveDraft(false).catch(()=>{});editorBackdrop.hidden=true;activeId=null;editorDraft=null;markdownEditing=false;}
+  function closeEditor(){
+    clearTimeout(autosaveTimer);
+    if(editorDraft){
+      syncDraftFromFields();
+      if(transientNewIds.has(editorDraft.id)&&!noteHasMeaningfulContent(editorDraft)){
+        const discardedId=editorDraft.id;
+        discardTransientDraftLocal(discardedId);
+        renderBoard();
+        setStatus("Empty note discarded.");
+      }else if(!editorDraft.locked){
+        void saveDraft(false).catch(()=>{});
+      }
+    }
+    editorBackdrop.hidden=true;
+    activeId=null;
+    editorDraft=null;
+    markdownEditing=false;
+  }
 
   function redactForVaultLock() {
     clearTimeout(autosaveTimer);
     autosaveTimer=null;
     notes=[];
+    transientNewIds.clear();
     activeId=null;
     editorDraft=null;
     markdownEditing=false;

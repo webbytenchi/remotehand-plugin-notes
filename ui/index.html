@@ -22,7 +22,8 @@ input,select,textarea{outline:0}
 .toolbar-handle{position:absolute;top:0;left:50%;transform:translateX(-50%);width:34px;height:16px;padding:0;border-top:0;border-radius:0 0 7px 7px;background:var(--remotehand-button-background,#232c37);box-shadow:0 2px 5px rgba(0,0,0,.28);display:block;pointer-events:auto;opacity:.86;transition:opacity .12s ease,transform .18s ease,background .12s ease}
 .toolbar-handle::before{content:"";position:absolute;left:50%;top:4px;width:6px;height:6px;border-right:1.5px solid var(--remotehand-muted-text,#9aa8b8);border-bottom:1.5px solid var(--remotehand-muted-text,#9aa8b8);transform:translateX(-50%) rotate(45deg)}
 .toolbar-handle:hover,.toolbar-handle:focus-visible{opacity:1;background:var(--remotehand-button-hover,#2a3542)}
-.toolbar-reveal.open .toolbar-handle{opacity:0;pointer-events:none;transform:translate(-50%,-8px)}
+.toolbar-reveal.open .toolbar-handle{opacity:1;pointer-events:auto;transform:translateX(-50%);top:auto;bottom:-16px;border-radius:7px 7px 0 0;border-top:1px solid var(--remotehand-border,#3d4a58);border-bottom:0}
+.toolbar-reveal.open .toolbar-handle::before{top:6px;transform:translateX(-50%) rotate(225deg)}
 .toolbar .spacer{flex:1 1 auto;min-width:0}
 .search{flex:1 1 280px;min-width:160px;max-width:420px;padding:6px 9px;background:var(--remotehand-input-background,#0e141a)}
 .nav{display:flex;align-items:center;gap:3px;flex:0 0 auto;border-left:1px solid var(--remotehand-border,#2e3743);padding-left:8px;margin-left:1px}
@@ -368,14 +369,24 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
     toolbarHideTimer=null;
     toolbarReveal.classList.add("open");
     toolbarHandle.setAttribute("aria-expanded","true");
+    toolbarHandle.setAttribute("aria-label","Hide Notes header");
+    toolbarHandle.title="Hide Notes header";
+  }
+
+  function hideToolbar() {
+    clearTimeout(toolbarHideTimer);
+    toolbarHideTimer=null;
+    toolbarReveal.classList.remove("open");
+    toolbarHandle.setAttribute("aria-expanded","false");
+    toolbarHandle.setAttribute("aria-label","Show Notes header");
+    toolbarHandle.title="Show Notes header";
   }
 
   function scheduleToolbarHide(delay=420) {
     clearTimeout(toolbarHideTimer);
     toolbarHideTimer=setTimeout(()=>{
       if(toolbarReveal.contains(document.activeElement))return;
-      toolbarReveal.classList.remove("open");
-      toolbarHandle.setAttribute("aria-expanded","false");
+      hideToolbar();
     },delay);
   }
 
@@ -1183,9 +1194,17 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
     catch(error){setStatus(String(error),true);}
   }
 
-  toolbarHandle.addEventListener("mouseenter",showToolbar);
-  toolbarHandle.addEventListener("focus",showToolbar);
-  toolbarHandle.addEventListener("click",showToolbar);
+  toolbarHandle.addEventListener("mouseenter",()=>{
+    if(!toolbarReveal.classList.contains("open"))showToolbar();
+  });
+  toolbarHandle.addEventListener("focus",()=>{
+    if(!toolbarReveal.classList.contains("open"))showToolbar();
+  });
+  toolbarHandle.addEventListener("click",event=>{
+    event.preventDefault();
+    if(toolbarReveal.classList.contains("open"))hideToolbar();
+    else showToolbar();
+  });
   $("toolbar").addEventListener("mouseenter",showToolbar);
   $("toolbar").addEventListener("mouseleave",()=>scheduleToolbarHide());
   toolbarReveal.addEventListener("focusin",showToolbar);

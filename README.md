@@ -4,9 +4,9 @@ Private, Vault-backed sticky-note and checklist plugin for RemoteHand.
 
 ## Status
 
-**v0.1.0 is complete and manually accepted on Windows. Current `main` also includes post-v0.1.0 UI/UX polish that has not yet been tagged as a new release.**
+**v0.1.1 is the current Notes release baseline, building on the complete and manually accepted v0.1.0 foundation with UI/UX polish.**
 
-v0.1.0 includes:
+v0.1.0 foundation includes:
 
 - RemoteHand Plugin API v1 runtime/handshake
 - scoped RemoteHand Vault document access
@@ -23,9 +23,9 @@ v0.1.0 includes:
 - encrypted file/image attachment storage through RemoteHand Vault blobs
 - attachment picker, drag-and-drop, reorder, image preview, open, and cleanup lifecycle
 
-### Current mainline polish
+### v0.1.1 UI/UX polish
 
-Current `main` additionally includes post-v0.1.0 UI/UX changes that are not part of the frozen v0.1.0 tag:
+v0.1.1 promotes the accepted post-v0.1.0 UI/UX work into the next release baseline:
 
 - responsive single-line Notes toolbar with adaptive wrapping
 - editor keyboard flow from Title → Body → Labels/tags
@@ -81,4 +81,6 @@ New empty note/checklist drafts are transient: if the editor is closed before th
 ## Documentation
 
 - [v0.1.0 design specification](docs/V0.1.0-SPEC.md)
+- [v0.1.0 acceptance record](docs/V0.1.0-ACCEPTANCE.md)
+- [v0.1.1 acceptance record](docs/V0.1.1-ACCEPTANCE.md)
 - [Vault/storage integration contract](docs/VAULT-INTEGRATION.md)

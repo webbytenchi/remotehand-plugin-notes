@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.1 - 2026-10-01
 
 ### Added
 - Responsive Notes toolbar that keeps creation, search, view tabs, sort, status, and settings on one line when space allows and adapts cleanly at narrower widths.

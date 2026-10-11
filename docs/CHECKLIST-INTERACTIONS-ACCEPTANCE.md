@@ -1,4 +1,4 @@
-# Checklist interaction enhancement — acceptance plan
+# v0.1.3 checklist interactions — acceptance plan
 
 Branch: `emma/checklist-postit-interactions`
 

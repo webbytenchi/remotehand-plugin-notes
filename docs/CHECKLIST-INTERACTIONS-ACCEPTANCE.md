@@ -39,7 +39,7 @@ Papa manually tested the v0.1.3 checklist interaction candidate on Windows and c
 - Windows build script now stops on Rust test or release-build failure instead of continuing to package a failed build.
 - Rust tests: **7 passed, 0 failed**.
 - Optimized Windows build and installable package/ZIP creation succeeded.
-- Windows ZIP SHA-256: `FE3E54FC7D33346DB0C840DEB53FF9B6123597F7FE606491AB6A3F106DA04E4D`.
+- Pre-documentation candidate ZIP SHA-256: `FE3E54FC7D33346DB0C840DEB53FF9B6123597F7FE606491AB6A3F106DA04E4D`. The ZIP contains README and CHANGELOG, so this checksum is not the final release archive checksum; rebuild from the final documented main commit and publish the rebuilt archive's checksum.
 
 ## Compatibility
 

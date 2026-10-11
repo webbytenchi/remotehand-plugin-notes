@@ -12,7 +12,7 @@
 - Rust tests: 7 passed, 0 failed.
 - Optimized Windows build and installable ZIP packaging succeeded.
 - Runtime version is derived from Cargo package metadata, avoiding a separately hard-coded plugin version.
-- Windows package ZIP SHA-256: `FE3E54FC7D33346DB0C840DEB53FF9B6123597F7FE606491AB6A3F106DA04E4D`.
+- Pre-documentation candidate ZIP SHA-256: `FE3E54FC7D33346DB0C840DEB53FF9B6123597F7FE606491AB6A3F106DA04E4D`. Because the ZIP includes README and CHANGELOG, rebuild the final release ZIP from the documented main commit and publish that rebuilt ZIP's checksum.
 
 ## 0.1.2 - 2026-10-01
 

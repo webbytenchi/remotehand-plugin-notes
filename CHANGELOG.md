@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.3 - 2026-10-12 (pre-release candidate)
+
+### Added
+- Inline checklist toggles on post-it cards, with completed items grouped at the bottom while preserving custom order within each group.
+- Expandable checklist previews with `+N more` and `Show less` controls.
+- Drag-and-drop checklist item reordering in Edit Notes using a dedicated drag handle.
+
+### Validation
+- Pending Papa's install and manual acceptance testing. This is a pre-release candidate; no v0.1.3 release or tag has been published.
+
 ## 0.1.2 - 2026-10-01
 
 ### Added

@@ -52,7 +52,7 @@ input,select,textarea{outline:0}
 .card-file-icon{font-size:23px;line-height:1}.card-file-ext{font-size:9px;font-weight:800;letter-spacing:.08em;max-width:86%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .card-attachment-more{display:flex;align-items:center;justify-content:center;width:42px;height:42px;flex:0 0 42px;border-radius:4px;background:rgba(20,24,28,.78);color:#fff;font-size:11px;font-weight:700;box-shadow:0 2px 5px rgba(0,0,0,.22)}
 .meta{margin-top:9px;color:rgba(32,36,42,.72);font-size:11px;display:flex;gap:8px;flex-wrap:wrap}
-.check-preview{display:flex;flex-direction:column;gap:4px;color:var(--note-ink)}.check-line{display:flex;gap:6px;align-items:flex-start}.check-line.done{text-decoration:line-through;opacity:.58}
+.check-preview{display:flex;flex-direction:column;gap:4px;color:var(--note-ink)}.check-line{display:flex;gap:6px;align-items:flex-start;min-width:0}.check-line label{display:flex;gap:6px;align-items:flex-start;min-width:0;cursor:pointer}.check-line input[type=checkbox]{margin:3px 0 0;accent-color:var(--remotehand-accent,#356da8);flex:0 0 auto}.check-line span{overflow-wrap:anywhere}.check-line.done{opacity:.62}.check-line.done span{text-decoration:line-through}.check-more{align-self:flex-start;padding:2px 0;border:0;background:transparent;color:inherit;text-decoration:underline;text-underline-offset:2px;opacity:.75;cursor:pointer;font:inherit;font-size:11px}.check-more:hover{opacity:1}.check-line input:disabled{cursor:wait}
 .empty{padding:44px 16px;text-align:center;color:var(--remotehand-muted-text,#9aa8b8)}
 .locked-vault{height:100%;display:flex;align-items:center;justify-content:center;padding:24px}.locked-panel{text-align:center;max-width:420px}.locked-panel h2{margin:0 0 8px}.locked-panel p{color:var(--remotehand-muted-text,#9aa8b8);line-height:1.5}
 .modal-backdrop{position:fixed;inset:0;z-index:20;background:rgba(0,0,0,.58);display:flex;align-items:center;justify-content:center;padding:24px}
@@ -70,7 +70,7 @@ input,select,textarea{outline:0}
 .md-view h1{font-size:1.55em}.md-view h2{font-size:1.3em}.md-view h3{font-size:1.12em}.md-view pre{white-space:pre-wrap;background:rgba(0,0,0,.2);padding:8px;border-radius:7px}.md-view code{font-family:var(--remotehand-terminal-font-family,Consolas,monospace)}
 .form-row{display:grid;grid-template-columns:145px minmax(0,1fr);gap:9px;align-items:center;margin-bottom:10px}
 .form-row input,.form-row select{width:100%;padding:6px 8px;background:var(--remotehand-input-background,#0e141a)}
-.checklist{display:flex;flex-direction:column;gap:6px}.check-item{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:7px;align-items:center}.check-item input[type=text]{padding:7px 8px;background:var(--remotehand-input-background,#0e141a);width:100%}.check-item.done input[type=text]{text-decoration:line-through;opacity:.65}
+.checklist{display:flex;flex-direction:column;gap:6px}.check-item{display:grid;grid-template-columns:22px auto minmax(0,1fr) auto;gap:7px;align-items:center}.check-drag-handle{cursor:grab;touch-action:none;opacity:.65;padding:4px 2px}.check-drag-handle:active{cursor:grabbing}.check-item input[type=text]{padding:7px 8px;background:var(--remotehand-input-background,#0e141a);width:100%}.check-item.done input[type=text]{text-decoration:line-through;opacity:.65}
 .attachment-area{margin-top:14px;padding-top:12px;border-top:1px solid var(--remotehand-border,#2e3743)}.attachment-area h3{margin:0 0 6px;font-size:13px}.attachment-note{font-size:12px;color:var(--remotehand-muted-text,#9aa8b8);line-height:1.45}.attachment-list{display:flex;flex-direction:column;gap:6px;margin:8px 0}.attachment-row{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:8px;align-items:center;padding:6px;border:1px solid var(--remotehand-border,#34404d);border-radius:8px;background:var(--remotehand-background,#11151a)}.attachment-row.dragging{opacity:.45}.attachment-row.drop-target{outline:2px solid var(--remotehand-accent-border,#6f9bc8)}.attachment-thumb{width:44px;height:44px;border-radius:6px;object-fit:cover;background:rgba(255,255,255,.04);display:flex;align-items:center;justify-content:center;font-size:20px;overflow:hidden}.attachment-thumb img{width:100%;height:100%;object-fit:cover}.attachment-name{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.attachment-size{font-size:11px;color:var(--remotehand-muted-text,#9aa8b8);margin-top:2px}.attachment-actions{display:flex;gap:4px}
 .color-row{display:flex;gap:5px;flex-wrap:wrap}.swatch{width:24px;height:24px;border-radius:50%;padding:0;border:2px solid transparent;background:var(--swatch)}.swatch.active{border-color:var(--remotehand-text,#fff)}
 .notice{padding:7px 9px;margin-bottom:8px;border:1px solid var(--remotehand-border,#3d4a58);border-radius:7px;color:var(--remotehand-muted-text,#a7b2bf)}
@@ -249,6 +249,7 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
   const toolbarHandle = $("toolbarHandle");
   let toolbarHideTimer = null;
 
+  const expandedChecklistIds = new Set();
   let notes = [];
   let catalog = {version:1,noteIds:[],manualOrder:{main:[],archive:[],trash:[]},pinnedOrder:[]};
   let settings = {
@@ -429,10 +430,39 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
   }
 
   function renderChecklistPreview(note) {
-    const items=(note.checklist||[]).slice(0,5);
-    const lines=items.map(item => '<div class="check-line '+(item.done?"done":"")+'"><span>'+(item.done?"☑":"☐")+'</span><span>'+esc(item.text)+'</span></div>').join("");
-    const more=(note.checklist||[]).length-items.length;
-    return '<div class="check-preview">'+lines+(more?'<div class="meta">+'+more+' more</div>':"")+'</div>';
+    const all=Array.isArray(note.checklist)?note.checklist:[];
+    const ordered=[...all.filter(item=>!item.done),...all.filter(item=>item.done)];
+    const expanded=expandedChecklistIds.has(note.id);
+    const items=expanded?ordered:ordered.slice(0,5);
+    const lines=items.map(item=>'<div class="check-line '+(item.done?"done":"")+'"><label><input type="checkbox" data-check-item="'+esc(item.id)+'" '+(item.done?"checked ":"")+(note.locked||note.location!=="main"?"disabled ":"")+'aria-label="'+(item.done?"Mark incomplete: ":"Mark complete: ")+esc(item.text||"Checklist item")+'"><span>'+esc(item.text)+'</span></label></div>').join("");
+    const remaining=ordered.length-items.length;
+    const expansion=expanded&&all.length>5?'<button type="button" class="check-more" data-check-expand>Show less</button>':remaining>0?'<button type="button" class="check-more" data-check-expand>+'+remaining+' more</button>':"";
+    return '<div class="check-preview">'+lines+expansion+'</div>';
+  }
+
+  async function toggleChecklistItem(noteId,itemId,checked,checkbox) {
+    const current=notes.find(note=>note.id===noteId);
+    if(!current||current.locked||current.location!=="main")return;
+    const updated=clone(current);
+    const item=(updated.checklist||[]).find(entry=>entry.id===itemId);
+    if(!item)return;
+    item.done=checked;
+    updated.updatedAt=nowIso();
+    if(checkbox)checkbox.disabled=true;
+    try{
+      await request("notes.save",{note:updated});
+      const index=notes.findIndex(note=>note.id===noteId);
+      if(index>=0)notes[index]=clone(updated);
+      if(editorDraft?.id===noteId){
+        const draftItem=(editorDraft.checklist||[]).find(entry=>entry.id===itemId);
+        if(draftItem)draftItem.done=checked;
+      }
+      renderBoard();
+      setStatus("Checklist updated.");
+    }catch(error){
+      renderBoard();
+      setStatus("Could not save checklist item: "+String(error),true);
+    }
   }
 
   function attachmentExtension(name) {
@@ -472,6 +502,19 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
       searchInput.value=(note.labels||[])[index]||"";
       renderBoard();
     }));
+    el.querySelectorAll("[data-check-item]").forEach(input=>{
+      input.addEventListener("click",event=>event.stopPropagation());
+      input.addEventListener("change",event=>{
+        event.stopPropagation();
+        void toggleChecklistItem(note.id,input.dataset.checkItem,input.checked,input);
+      });
+    });
+    const expandChecklist=el.querySelector("[data-check-expand]");
+    if(expandChecklist)expandChecklist.addEventListener("click",event=>{
+      event.preventDefault();event.stopPropagation();
+      if(expandedChecklistIds.has(note.id))expandedChecklistIds.delete(note.id);else expandedChecklistIds.add(note.id);
+      renderBoard();
+    });
     el.addEventListener("click",()=>openEditor(note.id));
     el.addEventListener("dragstart",event=>{draggedCardId=note.id;el.classList.add("dragging");event.dataTransfer.effectAllowed="move";});
     el.addEventListener("dragend",()=>{draggedCardId=null;el.classList.remove("dragging");document.querySelectorAll(".drop-target").forEach(x=>x.classList.remove("drop-target"));});
@@ -1005,11 +1048,12 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
   function renderChecklistEditor() {
     const note=editorDraft;checklistHost.replaceChildren();
     const hide=$("hideCompletedToggle").checked;
-    const items=[...(note.checklist||[])].sort((a,b)=>Number(a.done)-Number(b.done));
+    const items=[...(note.checklist||[])];
     for(const item of items){
       if(hide&&item.done)continue;
       const row=document.createElement("div");row.className="check-item"+(item.done?" done":"");row.draggable=!note.locked;
       row.dataset.id=item.id;
+      const handle=document.createElement("span");handle.className="check-drag-handle";handle.textContent="⠿";handle.title="Drag to reorder";handle.setAttribute("aria-label","Drag to reorder checklist item");
       const box=document.createElement("input");box.type="checkbox";box.checked=!!item.done;box.disabled=note.locked;
       const input=document.createElement("input");input.type="text";input.value=item.text||"";input.disabled=note.locked;
       const remove=document.createElement("button");remove.textContent="✕";remove.className="icon-btn";remove.disabled=note.locked;
@@ -1017,11 +1061,11 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
       input.addEventListener("input",()=>{item.text=input.value;markDirty();});
       input.addEventListener("keydown",event=>{if(event.key==="Enter"){event.preventDefault();if(!input.value.trim()){removeChecklistItem(item.id);}else addChecklistItem(item.id);}});
       remove.addEventListener("click",()=>removeChecklistItem(item.id));
-      row.addEventListener("dragstart",()=>{draggedCardId="check:"+item.id;row.classList.add("dragging");});
+      row.addEventListener("dragstart",event=>{if(!event.target.closest(".check-drag-handle")){event.preventDefault();return;}draggedCardId="check:"+item.id;event.dataTransfer.effectAllowed="move";row.classList.add("dragging");});
       row.addEventListener("dragend",()=>{draggedCardId=null;row.classList.remove("dragging");});
       row.addEventListener("dragover",event=>{if(draggedCardId?.startsWith("check:"))event.preventDefault();});
       row.addEventListener("drop",event=>{event.preventDefault();const source=draggedCardId?.slice(6);if(source&&source!==item.id)reorderChecklist(source,item.id);});
-      row.append(box,input,remove);checklistHost.append(row);
+      row.append(handle,box,input,remove);checklistHost.append(row);
     }
   }
 

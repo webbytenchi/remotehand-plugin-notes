@@ -14,7 +14,14 @@ Write-Host "Building RemoteHand Notes (release)..."
 Push-Location $repo
 try {
     cargo test
+    if ($LASTEXITCODE -ne 0) {
+        throw "Rust tests failed with exit code $LASTEXITCODE; package creation was stopped."
+    }
+
     cargo build --release
+    if ($LASTEXITCODE -ne 0) {
+        throw "Release build failed with exit code $LASTEXITCODE; package creation was stopped."
+    }
 } finally {
     Pop-Location
 }

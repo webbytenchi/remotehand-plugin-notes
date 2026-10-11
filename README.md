@@ -4,7 +4,7 @@ Private, Vault-backed sticky-note and checklist plugin for RemoteHand.
 
 ## Status
 
-**v0.1.2 is the current Notes release baseline, building on the accepted v0.1.1 UI/UX foundation with additional board-space, Markdown, sort-persistence, and attachment-layout improvements.**
+**v0.1.3 checklist interactions have passed manual acceptance on Windows.** The release notes and acceptance record are finalized; v0.1.2 remains the latest published release until the v0.1.3 tag and GitHub Release are published.
 
 v0.1.0 foundation includes:
 
@@ -22,6 +22,15 @@ v0.1.0 foundation includes:
 - Trash protection for locked notes
 - encrypted file/image attachment storage through RemoteHand Vault blobs
 - attachment picker, drag-and-drop, reorder, image preview, open, and cleanup lifecycle
+
+### v0.1.3 checklist interactions
+
+- Toggle checklist items directly on post-it cards without opening Edit Notes.
+- Display unchecked items first and checked items last while preserving the user's saved order within each group.
+- Expand beyond the five-item preview with `+N more`, then collapse with `Show less`.
+- Reorder checklist items in Edit Notes using a dedicated drag handle; the saved sequence is retained independently of completion state.
+
+See [docs/CHECKLIST-INTERACTIONS-ACCEPTANCE.md](docs/CHECKLIST-INTERACTIONS-ACCEPTANCE.md) for the completed acceptance record.
 
 ### v0.1.2 board and interaction polish
 
@@ -94,4 +103,5 @@ New empty note/checklist drafts are transient: if the editor is closed before th
 - [v0.1.0 acceptance record](docs/V0.1.0-ACCEPTANCE.md)
 - [v0.1.1 acceptance record](docs/V0.1.1-ACCEPTANCE.md)
 - [v0.1.2 acceptance record](docs/V0.1.2-ACCEPTANCE.md)
+- [v0.1.3 checklist interactions acceptance record](docs/CHECKLIST-INTERACTIONS-ACCEPTANCE.md)
 - [Vault/storage integration contract](docs/VAULT-INTEGRATION.md)

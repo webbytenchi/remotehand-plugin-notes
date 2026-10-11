@@ -1051,9 +1051,9 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
     const items=[...(note.checklist||[])];
     for(const item of items){
       if(hide&&item.done)continue;
-      const row=document.createElement("div");row.className="check-item"+(item.done?" done":"");row.draggable=!note.locked;
+      const row=document.createElement("div");row.className="check-item"+(item.done?" done":"");row.draggable=false;
       row.dataset.id=item.id;
-      const handle=document.createElement("span");handle.className="check-drag-handle";handle.textContent="⠿";handle.title="Drag to reorder";handle.setAttribute("aria-label","Drag to reorder checklist item");
+      const handle=document.createElement("span");handle.className="check-drag-handle";handle.textContent="⠿";handle.title="Drag to reorder";handle.setAttribute("aria-label","Drag to reorder checklist item");handle.draggable=!note.locked;
       const box=document.createElement("input");box.type="checkbox";box.checked=!!item.done;box.disabled=note.locked;
       const input=document.createElement("input");input.type="text";input.value=item.text||"";input.disabled=note.locked;
       const remove=document.createElement("button");remove.textContent="✕";remove.className="icon-btn";remove.disabled=note.locked;
@@ -1061,10 +1061,11 @@ hr{border:0;border-top:1px solid var(--remotehand-border,#2e3743);margin:12px 0}
       input.addEventListener("input",()=>{item.text=input.value;markDirty();});
       input.addEventListener("keydown",event=>{if(event.key==="Enter"){event.preventDefault();if(!input.value.trim()){removeChecklistItem(item.id);}else addChecklistItem(item.id);}});
       remove.addEventListener("click",()=>removeChecklistItem(item.id));
-      row.addEventListener("dragstart",event=>{if(!event.target.closest(".check-drag-handle")){event.preventDefault();return;}draggedCardId="check:"+item.id;event.dataTransfer.effectAllowed="move";row.classList.add("dragging");});
-      row.addEventListener("dragend",()=>{draggedCardId=null;row.classList.remove("dragging");});
-      row.addEventListener("dragover",event=>{if(draggedCardId?.startsWith("check:"))event.preventDefault();});
-      row.addEventListener("drop",event=>{event.preventDefault();const source=draggedCardId?.slice(6);if(source&&source!==item.id)reorderChecklist(source,item.id);});
+      handle.addEventListener("dragstart",event=>{draggedCardId="check:"+item.id;event.dataTransfer.effectAllowed="move";row.classList.add("dragging");});
+      handle.addEventListener("dragend",()=>{draggedCardId=null;row.classList.remove("dragging");document.querySelectorAll(".check-item.drop-target").forEach(x=>x.classList.remove("drop-target"));});
+      row.addEventListener("dragover",event=>{if(draggedCardId?.startsWith("check:")){event.preventDefault();row.classList.add("drop-target");}});
+      row.addEventListener("dragleave",()=>row.classList.remove("drop-target"));
+      row.addEventListener("drop",event=>{event.preventDefault();row.classList.remove("drop-target");const source=draggedCardId?.slice(6);if(source&&source!==item.id)reorderChecklist(source,item.id);});
       row.append(handle,box,input,remove);checklistHost.append(row);
     }
   }

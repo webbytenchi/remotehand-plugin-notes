@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.3 - 2026-10-12 (pre-release candidate)
+## 0.1.3 - 2026-10-12
 
 ### Added
 - Inline checklist toggles on post-it cards, with completed items grouped at the bottom while preserving custom order within each group.
@@ -8,7 +8,11 @@
 - Drag-and-drop checklist item reordering in Edit Notes using a dedicated drag handle.
 
 ### Validation
-- Pending Papa's install and manual acceptance testing. This is a pre-release candidate; no v0.1.3 release or tag has been published.
+- Papa completed manual acceptance on Windows: direct toggling, completed/unchecked grouping, expandable previews, drag-and-drop reordering, and persistence/order behavior all work.
+- Rust tests: 7 passed, 0 failed.
+- Optimized Windows build and installable ZIP packaging succeeded.
+- Runtime version is derived from Cargo package metadata, avoiding a separately hard-coded plugin version.
+- Windows package ZIP SHA-256: `FE3E54FC7D33346DB0C840DEB53FF9B6123597F7FE606491AB6A3F106DA04E4D`.
 
 ## 0.1.2 - 2026-10-01
 

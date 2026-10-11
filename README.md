@@ -4,7 +4,7 @@ Private, Vault-backed sticky-note and checklist plugin for RemoteHand.
 
 ## Status
 
-**v0.1.2 is the current Notes release baseline, building on the accepted v0.1.1 UI/UX foundation with additional board-space, Markdown, sort-persistence, and attachment-layout improvements.**
+**v0.1.2 is the current published Notes release. The `emma/checklist-postit-interactions` branch prepares v0.1.3 with inline checklist toggles, expandable previews, and drag-to-reorder editing; it remains pending manual acceptance and is not yet released.**
 
 v0.1.0 foundation includes:
 
@@ -32,6 +32,15 @@ v0.1.2 adds the next accepted Notes usability pass:
 - persistent Sort dropdown preference
 - more forgiving lightweight Markdown heading rendering
 - responsive card attachment previews that show as many image/file tiles as fit before using `+N`
+
+#### v0.1.3 checklist interaction candidate
+
+- Toggle checklist items directly on post-it cards without opening Edit Notes.
+- Display unchecked items first and checked items last while preserving the user's saved order within each group.
+- Expand beyond the five-item preview with `+N more`, then collapse with `Show less`.
+- Reorder checklist items in Edit Notes using a dedicated drag handle; the saved sequence is retained independently of completion state.
+
+Acceptance checklist: [docs/CHECKLIST-INTERACTIONS-ACCEPTANCE.md](docs/CHECKLIST-INTERACTIONS-ACCEPTANCE.md). These changes are pending manual testing and are not yet a published release.
 
 ### v0.1.1 UI/UX polish
 
